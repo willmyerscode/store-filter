@@ -1,0 +1,1034 @@
+/** Store Filter for Squarespace
+* Copyright Will-Myers.com
+**/
+
+/* Custom Property Reference
+ *
+ * Colors: these inherit the section's own Squarespace theme colors, so the
+ * filters match whichever section theme the collection sits in. Each falls
+ * back to a sensible black & white value when the theme variable is missing.
+ * --wm-store-filter-text: the colour the header's navigation links render with,
+ *   read off a real nav link at load. Falls back to var(--navigationLinkColor) and
+ *   then to hsla(var(--black-hsl, 0, 0%, 7%), 1).
+ * --wm-store-filter-heading: var(--wm-store-filter-text);   (group headings, drawer title)
+ * --wm-store-filter-muted: matches the filter text by default — set it to
+ *   something like hsla(var(--accent-hsl), 0.6) to dim the search placeholder.
+ * --wm-store-filter-background: var(--siteBackgroundColor, #fff);          (drawer + dropdowns)
+ * --wm-store-filter-border: a 20% tint of the filter text — the hairline
+ *   dividers, dropdown outlines and the unfilled part of the price track.
+ * --wm-store-filter-box-border: matches the filter text by default — the
+ *   outline of the search field, checkboxes, radios and the top layout's pills.
+ * --wm-store-filter-hover: a 7% tint of the filter text.
+ * --wm-store-filter-accent: var(--primaryButtonBackgroundColor, hsla(var(--accent-hsl, 0, 0%, 0%), 1));
+ *   — the price slider, ticked boxes and buttons, deliberately the button
+ *   colour rather than the nav link colour.
+ * --wm-store-filter-accent-contrast: var(--primaryButtonTextColor, hsla(var(--safeInverseAccent-hsl, 0, 0%, 100%), 1));
+ * --wm-store-filter-backdrop: hsla(var(--black-hsl, 0, 0%, 0%), 0.45);
+ *
+ * Layout:
+ * --wm-store-filter-sidebar-width: 250px;
+ * --wm-store-filter-edge-offset: measured in JS — the gap between the
+ *   section's content edge and the logo, so the side panel starts on the same
+ *   line as the logo. Set it yourself (0px for no shift) to take it over.
+ * --wm-store-filter-gap: 4vw;                (space between sidebar and items)
+ * --wm-store-filter-group-gap: 1.75em;       (space between filter groups)
+ * --wm-store-filter-sticky-offset: how far down the sticky sidebar pins.
+ *   Defaults to the height of a fixed or sticky header plus the gap below. Set
+ *   it to a plain length (20px) to ignore the header entirely.
+ * --wm-store-filter-sticky-gap: 0px;         (gap below the header)
+ * --wm-store-filter-icon-size: 20px;          (mobile filter icon)
+ * --wm-store-filter-icon-button-size: 40px;   (tap target height)
+ * --wm-store-filter-drawer-width: min(86vw, 340px);
+ * --wm-store-filter-drawer-top: set in JS — how far down the drawer and
+ *   its backdrop start, so they clear whatever of the header is on screen.
+ * --wm-store-filter-z: 99999;   (above Squarespace's sticky header)
+ *
+ * Shape & type:
+ * --wm-store-filter-font-size: 0.85rem;       (every word in the filters)
+ * --wm-store-filter-title-font-size: 0.9rem;   (group headings, drawer title)
+ * --wm-store-filter-radius: 6px;
+ * --wm-store-filter-control-radius: 4px;
+ * --wm-store-filter-pill-radius: 100px;
+ * --wm-store-filter-price-thumb: 18px;   (slider handle size)
+ * --wm-store-filter-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+ *
+ * Mobile overrides:
+ * --wm-store-filter-gap-mobile: 20px;
+ */
+
+.wm-store-filter {
+  --wm-store-filter-resolved-text: var(
+    --wm-store-filter-text,
+    var(
+      --wm-store-filter-nav-color,
+      var(--navigationLinkColor, hsla(var(--black-hsl, 0, 0%, 7%), 1))
+    )
+  );
+  /* Tints of the filter text, so every line and hover matches the nav links.
+     The plain hsla values are the fallback for browsers without color-mix;
+     the @supports block below upgrades them. */
+  --wm-store-filter-resolved-border: var(
+    --wm-store-filter-border,
+    hsla(var(--accent-hsl, 0, 0%, 0%), 0.2)
+  );
+  /* The search field and tick boxes read as controls, so they take the full
+     text colour rather than the hairline tint the panel's dividers use. */
+  --wm-store-filter-resolved-box-border: var(
+    --wm-store-filter-box-border,
+    var(--wm-store-filter-resolved-text)
+  );
+  --wm-store-filter-resolved-hover: var(
+    --wm-store-filter-hover,
+    hsla(var(--accent-hsl, 0, 0%, 0%), 0.07)
+  );
+  --wm-store-filter-resolved-muted: var(
+    --wm-store-filter-muted,
+    var(--wm-store-filter-resolved-text)
+  );
+  --wm-store-filter-resolved-accent: var(
+    --wm-store-filter-accent,
+    var(--primaryButtonBackgroundColor, hsla(var(--accent-hsl, 0, 0%, 0%), 1))
+  );
+  --wm-store-filter-resolved-accent-contrast: var(
+    --wm-store-filter-accent-contrast,
+    var(--primaryButtonTextColor, hsla(var(--safeInverseAccent-hsl, 0, 0%, 100%), 1))
+  );
+  --wm-store-filter-resolved-background: var(
+    --wm-store-filter-background,
+    var(--siteBackgroundColor, #fff)
+  );
+  /* The sidebar clears a fixed or sticky header and adds the gap below it.
+     --header-offset is measured in JS: the header's height while it stays on
+     screen, and 0 for a header that scrolls away or was never fixed. */
+  --wm-store-filter-resolved-sticky-offset: var(
+    --wm-store-filter-sticky-offset,
+    calc(
+      var(--wm-store-filter-header-offset, 0px) +
+        var(--wm-store-filter-sticky-gap, 0px)
+    )
+  );
+
+  display: block;
+  color: var(--wm-store-filter-resolved-text);
+  font-size: var(--wm-store-filter-font-size, 0.85rem);
+  line-height: 1.4;
+}
+
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  .wm-store-filter {
+    --wm-store-filter-resolved-border: var(
+      --wm-store-filter-border,
+      color-mix(in srgb, var(--wm-store-filter-resolved-text) 20%, transparent)
+    );
+    --wm-store-filter-resolved-hover: var(
+      --wm-store-filter-hover,
+      color-mix(in srgb, var(--wm-store-filter-resolved-text) 7%, transparent)
+    );
+  }
+}
+
+.wm-store-filter *,
+.wm-store-filter *::before,
+.wm-store-filter *::after {
+  box-sizing: border-box;
+}
+
+/* Several of the plugin's own elements set a display value, which would
+   otherwise beat the browser's [hidden] rule. */
+.wm-store-filter [hidden] {
+  display: none !important;
+}
+
+.wm-store-filter-visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Squarespace's own filter and pagination interface, switched off while the
+   plugin is driving the list. */
+.wm-store-filter-native-hidden {
+  display: none !important;
+}
+
+/* ================================
+   LAYOUT
+   ================================ */
+
+.wm-store-filter-layout {
+  display: grid;
+  gap: var(--wm-store-filter-gap, 4vw);
+  align-items: start;
+}
+
+.wm-store-filter[data-position='side'][data-variant='panel']:not(.is-mobile)
+  .wm-store-filter-layout {
+  /* --edge-offset is measured in JS: how far the section's content sits in
+     from the logo. Widening the first column by it, and pulling the whole
+     grid left by the same amount, starts the filters on the logo's line
+     while leaving the items exactly where the section put them. */
+  margin-left: calc(-1 * var(--wm-store-filter-edge-offset, 0px));
+  width: calc(100% + var(--wm-store-filter-edge-offset, 0px));
+  grid-template-columns:
+    calc(
+      var(--wm-store-filter-sidebar-width, 250px) +
+        var(--wm-store-filter-edge-offset, 0px)
+    )
+    minmax(0, 1fr);
+}
+
+.wm-store-filter[data-position='side'][data-variant='panel']:not(.is-mobile)
+  .wm-store-filter-panel {
+  width: var(--wm-store-filter-sidebar-width, 250px);
+  max-width: 100%;
+}
+
+/* Keyed on the variant, not the setting: the row of dropdowns is also what
+   a store gets on mobile when mobileLayout is 'top'. */
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-layout {
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(var(--wm-store-filter-gap, 4vw) / 2);
+}
+
+.wm-store-filter-content {
+  min-width: 0;
+}
+
+.wm-store-filter[data-position='side'][data-variant='panel']:not(.is-mobile)
+  .wm-store-filter-panel {
+  position: sticky;
+  top: var(--wm-store-filter-resolved-sticky-offset);
+  max-height: calc(
+    100vh - var(--wm-store-filter-resolved-sticky-offset) -
+      var(--wm-store-filter-sticky-gap, 0px)
+  );
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ================================
+   PANEL
+   ================================ */
+
+.wm-store-filter-panel-header {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 0.9em;
+  margin-bottom: 0.9em;
+  border-bottom: 1px solid var(--wm-store-filter-resolved-border);
+}
+
+.wm-store-filter-panel-title {
+  margin: 0;
+  font-size: var(--wm-store-filter-title-font-size, 0.9rem);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--wm-store-filter-heading, var(--wm-store-filter-resolved-text));
+}
+
+.wm-store-filter-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--wm-store-filter-transition, 0.25s cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.wm-store-filter-close:hover {
+  background: var(--wm-store-filter-resolved-hover);
+}
+
+.wm-store-filter-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.wm-store-filter-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wm-store-filter-group-gap, 1.75em);
+}
+
+.wm-store-filter-loading {
+  margin: 0;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.wm-store-filter-panel-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 1.5em;
+}
+
+.wm-store-filter-apply {
+  display: none;
+  flex: 1;
+}
+
+.wm-store-filter-button-secondary {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity var(--wm-store-filter-transition, 0.25s cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.wm-store-filter-button-secondary:hover {
+  opacity: 1;
+}
+
+.wm-store-filter.is-loading .wm-store-filter-panel-footer {
+  display: none;
+}
+
+/* Sidebar layout: the count moves to the foot of the filters, which leaves
+   the toolbar above the items with nothing in it. */
+.wm-store-filter[data-position='side'][data-variant='panel']:not(.is-mobile)
+  .wm-store-filter-panel-footer {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6em;
+}
+
+.wm-store-filter[data-position='side'][data-variant='panel']:not(.is-mobile)
+  .wm-store-filter-toolbar {
+  display: none;
+}
+
+/* ================================
+   SEARCH
+   ================================ */
+
+.wm-store-filter-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.wm-store-filter-search-icon {
+  position: absolute;
+  left: 0.75em;
+  display: flex;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.wm-store-filter-search-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.wm-store-filter-search-input {
+  width: 100%;
+  padding: 0.7em 0.9em 0.7em 2.4em;
+  border: 1px solid var(--wm-store-filter-resolved-box-border);
+  border-radius: var(--wm-store-filter-control-radius, 4px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.wm-store-filter-search-input::placeholder {
+  color: var(--wm-store-filter-resolved-muted);
+  /* Firefox dims placeholders by default — undo that so it really matches. */
+  opacity: 1;
+}
+
+/* No browser focus ring on the search field. The border doubles inwards
+   instead — same colour, no layout shift, still a visible change for anyone
+   arriving by keyboard. */
+.wm-store-filter-search-input:focus,
+.wm-store-filter-search-input:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--wm-store-filter-resolved-box-border);
+}
+
+/* ================================
+   FILTER GROUPS
+   ================================ */
+
+.wm-store-filter-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wm-store-filter-heading, var(--wm-store-filter-resolved-text));
+  font: inherit;
+  font-size: var(--wm-store-filter-title-font-size, 0.9rem);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wm-store-filter-group-label {
+  flex: 1;
+}
+
+.wm-store-filter-group-selected {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.6;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wm-store-filter-group-chevron {
+  display: flex;
+  transition: transform var(--wm-store-filter-transition, 0.25s cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.wm-store-filter-group-chevron svg {
+  width: 16px;
+  height: 16px;
+}
+
+.wm-store-filter-group.is-collapsed .wm-store-filter-group-chevron {
+  transform: rotate(-90deg);
+}
+
+/* No collapse arrow on a group that cannot collapse — the price slider, or
+   every group when collapsible is switched off. The top-bar variant keeps it,
+   where the same control opens the dropdown. */
+.wm-store-filter[data-variant='panel']
+  .wm-store-filter-group[data-collapsible='false']
+  .wm-store-filter-group-chevron {
+  display: none;
+}
+
+.wm-store-filter[data-variant='panel']
+  .wm-store-filter-group[data-collapsible='false']
+  .wm-store-filter-group-toggle {
+  cursor: default;
+}
+
+.wm-store-filter-group-panel {
+  padding-top: 0.85em;
+}
+
+.wm-store-filter-group.is-collapsed .wm-store-filter-group-panel {
+  display: none;
+}
+
+.wm-store-filter-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wm-store-filter-option-item {
+  margin: 0;
+  padding: 0;
+}
+
+.wm-store-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  cursor: pointer;
+}
+
+.wm-store-filter-option.is-empty {
+  opacity: 0.4;
+}
+
+.wm-store-filter-input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+
+.wm-store-filter-option-box {
+  position: relative;
+  flex: none;
+  width: 1.05em;
+  height: 1.05em;
+  border: 1px solid var(--wm-store-filter-resolved-box-border);
+  border-radius: 3px;
+  transition: border-color var(--wm-store-filter-transition, 0.25s),
+    background var(--wm-store-filter-transition, 0.25s);
+}
+
+.wm-store-filter-option-item input[type='radio'] + .wm-store-filter-option-box {
+  border-radius: 50%;
+}
+
+.wm-store-filter-option:hover .wm-store-filter-option-box {
+  border-color: var(--wm-store-filter-resolved-accent);
+}
+
+/* The box stays unfilled when ticked — the tick alone marks the selection, so
+   it reads the same way against any section background. */
+.wm-store-filter-input:checked + .wm-store-filter-option-box {
+  border-color: var(--wm-store-filter-resolved-accent);
+}
+
+.wm-store-filter-input:checked + .wm-store-filter-option-box::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 0.3em;
+  height: 0.55em;
+  border: solid var(--wm-store-filter-resolved-accent);
+  border-width: 0 2px 2px 0;
+  transform: translate(-50%, -55%) rotate(45deg);
+}
+
+.wm-store-filter-input:focus-visible + .wm-store-filter-option-box {
+  outline: 2px solid var(--wm-store-filter-resolved-accent);
+  outline-offset: 2px;
+}
+
+.wm-store-filter-option-label {
+  flex: 1;
+}
+
+.wm-store-filter-option-count {
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Buttons: the same inputs and the same state, drawn as pills. The tick box
+   steps aside and the pill itself carries the selection. */
+.wm-store-filter-group[data-style='buttons'] .wm-store-filter-options {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+.wm-store-filter-group[data-style='buttons'] .wm-store-filter-option {
+  gap: 0.45em;
+  padding: 0.45em 0.9em;
+  border: 1px solid var(--wm-store-filter-resolved-border);
+  border-radius: var(--wm-store-filter-pill-radius, 100px);
+  transition: border-color var(--wm-store-filter-transition, 0.25s),
+    background var(--wm-store-filter-transition, 0.25s);
+}
+
+.wm-store-filter-group[data-style='buttons'] .wm-store-filter-option-box {
+  display: none;
+}
+
+.wm-store-filter-group[data-style='buttons'] .wm-store-filter-option:hover {
+  border-color: var(--wm-store-filter-resolved-box-border);
+  background: var(--wm-store-filter-resolved-hover);
+}
+
+.wm-store-filter-group[data-style='buttons']
+  .wm-store-filter-input:checked
+  ~ .wm-store-filter-option-label {
+  font-weight: 600;
+}
+
+.wm-store-filter-group[data-style='buttons']
+  .wm-store-filter-option:has(.wm-store-filter-input:checked) {
+  border-color: var(--wm-store-filter-resolved-accent);
+  color: var(--wm-store-filter-resolved-accent);
+}
+
+.wm-store-filter-group[data-style='buttons']
+  .wm-store-filter-option:has(.wm-store-filter-input:focus-visible) {
+  outline: 2px solid var(--wm-store-filter-resolved-accent);
+  outline-offset: 2px;
+}
+
+.wm-store-filter-group[data-style='buttons'] .wm-store-filter-option-label {
+  flex: none;
+}
+
+/* ================================
+   PRICE SLIDER
+   ================================ */
+
+.wm-store-filter-price-values {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 0.6em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A range input's thumb centre travels from half a thumb in to half a thumb
+   from the end, never edge to edge. Track and fill are inset by that same
+   half thumb so the line starts exactly under the thumb at its minimum, and
+   --price-start / --price-end are plain 0–1 ratios measured along it. */
+.wm-store-filter-price-slider {
+  --wm-store-filter-price-start: 0;
+  --wm-store-filter-price-end: 1;
+  --wm-store-filter-price-inset: calc(
+    var(--wm-store-filter-price-thumb, 18px) / 2
+  );
+  position: relative;
+  height: calc(var(--wm-store-filter-price-thumb, 18px) + 6px);
+}
+
+.wm-store-filter-price-track,
+.wm-store-filter-price-fill {
+  position: absolute;
+  top: 50%;
+  height: 3px;
+  border-radius: 3px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.wm-store-filter-price-track {
+  left: var(--wm-store-filter-price-inset);
+  right: var(--wm-store-filter-price-inset);
+  background: var(--wm-store-filter-resolved-border);
+}
+
+.wm-store-filter-price-fill {
+  left: calc(
+    var(--wm-store-filter-price-inset) +
+      (100% - var(--wm-store-filter-price-thumb, 18px)) *
+      var(--wm-store-filter-price-start)
+  );
+  right: calc(
+    var(--wm-store-filter-price-inset) +
+      (100% - var(--wm-store-filter-price-thumb, 18px)) *
+      (1 - var(--wm-store-filter-price-end))
+  );
+  background: var(--wm-store-filter-resolved-accent);
+}
+
+.wm-store-filter-price-input {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.wm-store-filter-price-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: var(--wm-store-filter-price-thumb, 18px);
+  height: var(--wm-store-filter-price-thumb, 18px);
+  border: 2px solid var(--wm-store-filter-resolved-accent);
+  border-radius: 50%;
+  background: var(--wm-store-filter-resolved-background);
+  cursor: grab;
+}
+
+.wm-store-filter-price-input::-moz-range-thumb {
+  pointer-events: auto;
+  width: var(--wm-store-filter-price-thumb, 18px);
+  height: var(--wm-store-filter-price-thumb, 18px);
+  border: 2px solid var(--wm-store-filter-resolved-accent);
+  border-radius: 50%;
+  background: var(--wm-store-filter-resolved-background);
+  cursor: grab;
+}
+
+.wm-store-filter-price-input::-moz-range-track {
+  background: none;
+}
+
+.wm-store-filter-price-input:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--wm-store-filter-resolved-accent);
+  outline-offset: 2px;
+}
+
+/* ================================
+   TOOLBAR
+   ================================ */
+
+.wm-store-filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1.4em;
+}
+
+.wm-store-filter-count {
+  margin: 0;
+  opacity: 0.7;
+}
+
+/* On mobile this is the icon and the word Filter — no button chrome. */
+.wm-store-filter-mobile-toggle {
+  display: none;
+  align-items: center;
+  gap: 0.5em;
+  min-height: var(--wm-store-filter-icon-button-size, 40px);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.wm-store-filter-mobile-toggle-text {
+  white-space: nowrap;
+}
+
+.wm-store-filter-mobile-toggle-icon {
+  display: flex;
+}
+
+.wm-store-filter-mobile-toggle-icon svg {
+  width: var(--wm-store-filter-icon-size, 20px);
+  height: var(--wm-store-filter-icon-size, 20px);
+}
+
+/* ================================
+   EMPTY STATE + PAGINATION
+   ================================ */
+
+.wm-store-filter-empty {
+  padding: 3em 0;
+  text-align: center;
+}
+
+.wm-store-filter-empty-title {
+  margin: 0 0 0.4em;
+  font-size: 1.15em;
+  font-weight: 700;
+}
+
+.wm-store-filter-empty-text {
+  margin: 0;
+  opacity: 0.7;
+}
+
+.wm-store-filter-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 2.5em;
+}
+
+.wm-store-filter-pages {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wm-store-filter-page,
+.wm-store-filter-page-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.4em;
+  height: 2.4em;
+  padding: 0 0.5em;
+  border: 1px solid transparent;
+  border-radius: var(--wm-store-filter-control-radius, 4px);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background var(--wm-store-filter-transition, 0.25s),
+    border-color var(--wm-store-filter-transition, 0.25s);
+}
+
+.wm-store-filter-page:hover,
+.wm-store-filter-page-arrow:not([disabled]):hover {
+  background: var(--wm-store-filter-resolved-hover);
+}
+
+.wm-store-filter-page.is-current {
+  border-color: var(--wm-store-filter-resolved-border);
+  font-weight: 700;
+}
+
+.wm-store-filter-page-arrow[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.wm-store-filter-page-arrow svg {
+  width: 16px;
+  height: 16px;
+}
+
+.wm-store-filter-page-gap {
+  padding: 0 0.25em;
+  opacity: 0.6;
+}
+
+.wm-store-filter-load-more {
+  cursor: pointer;
+}
+
+/* ================================
+   TOP BAR / DROPDOWN VARIANT
+   ================================ */
+
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-panel-body {
+  flex: 1;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-search {
+  flex: 0 1 260px;
+}
+
+/* topAlignment. 'spread' pushes the search away from the groups using an auto
+   margin on whichever end it sits, so it follows searchPosition by itself. */
+.wm-store-filter[data-variant='dropdown'][data-align='right']
+  .wm-store-filter-panel-body {
+  justify-content: flex-end;
+}
+
+.wm-store-filter[data-variant='dropdown'][data-align='center']
+  .wm-store-filter-panel-body {
+  justify-content: center;
+}
+
+.wm-store-filter[data-variant='dropdown'][data-align='spread']
+  .wm-store-filter-panel-body
+  > .wm-store-filter-search:first-child {
+  margin-right: auto;
+}
+
+.wm-store-filter[data-variant='dropdown'][data-align='spread']
+  .wm-store-filter-panel-body
+  > .wm-store-filter-search:last-child {
+  margin-left: auto;
+}
+
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-search-input {
+  border-radius: var(--wm-store-filter-pill-radius, 100px);
+}
+
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-group {
+  position: relative;
+}
+
+/* The pills and their dropdowns read as controls, like the search field, so
+   they take the full text colour rather than the hairline tint. */
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-group-toggle {
+  width: auto;
+  padding: 0.7em 1.1em;
+  border: 1px solid var(--wm-store-filter-resolved-box-border);
+  border-radius: var(--wm-store-filter-pill-radius, 100px);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-group.has-selection
+  .wm-store-filter-group-toggle {
+  border-color: var(--wm-store-filter-resolved-accent);
+}
+
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-group-label {
+  flex: none;
+}
+
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-group-chevron {
+  transform: none;
+}
+
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-group.is-open
+  .wm-store-filter-group-chevron {
+  transform: rotate(180deg);
+}
+
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-group-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: calc(var(--wm-store-filter-z, 99999) + 1);
+  min-width: 240px;
+  /* Never wider than the screen it has to fit on. */
+  max-width: calc(100vw - 2 * var(--wm-store-filter-gap-mobile, 20px));
+  max-height: 60vh;
+  padding: 1.1em;
+  overflow-y: auto;
+  border: 1px solid var(--wm-store-filter-resolved-box-border);
+  border-radius: var(--wm-store-filter-radius, 6px);
+  background: var(--wm-store-filter-resolved-background);
+  box-shadow: 0 14px 40px hsla(var(--black-hsl, 0, 0%, 0%), 0.16);
+}
+
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-group.is-open
+  .wm-store-filter-group-panel {
+  display: block;
+}
+
+/* Clear All belongs under the bar, not in the run of pills — a full-width
+   flex item wraps onto its own line. */
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-panel-footer {
+  flex: 0 0 100%;
+  margin-top: 0.2em;
+}
+
+/* ================================
+   MOBILE DRAWER
+   ================================ */
+
+.wm-store-filter.is-mobile .wm-store-filter-layout {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--wm-store-filter-gap-mobile, 20px);
+}
+
+.wm-store-filter.is-mobile .wm-store-filter-mobile-toggle {
+  display: inline-flex;
+}
+
+/* Filter on one end, the count on the other. */
+.wm-store-filter.is-mobile .wm-store-filter-toolbar {
+  justify-content: space-between;
+}
+
+.wm-store-filter.is-mobile .wm-store-filter-panel-header {
+  display: flex;
+}
+
+.wm-store-filter.is-mobile .wm-store-filter-apply {
+  display: block;
+}
+
+/* Stacked in the drawer: Clear All sits above the button that closes it. */
+.wm-store-filter.is-mobile .wm-store-filter-panel-footer {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.9em;
+}
+
+.wm-store-filter.is-mobile .wm-store-filter-panel {
+  position: fixed;
+  top: var(--wm-store-filter-drawer-top, 0px);
+  bottom: 0;
+  left: 0;
+  z-index: calc(var(--wm-store-filter-z, 99999) + 1);
+  display: flex;
+  flex-direction: column;
+  width: var(--wm-store-filter-drawer-width, min(86vw, 340px));
+  max-height: none;
+  padding: 1.4em;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--wm-store-filter-resolved-background);
+  box-shadow: 0 0 60px hsla(var(--black-hsl, 0, 0%, 0%), 0.2);
+  transform: translateX(-102%);
+  visibility: hidden;
+}
+
+/* Only a real open or close animates. Crossing the breakpoint is a layout
+   change, and without this gate the sidebar would slide off to the left the
+   moment it became a drawer. JS arms the class once the new layout has
+   settled. */
+.wm-store-filter.is-mobile.is-drawer-ready .wm-store-filter-panel {
+  transition: transform var(--wm-store-filter-transition, 0.25s cubic-bezier(0.4, 0, 0.2, 1)),
+    visibility var(--wm-store-filter-transition, 0.25s cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.wm-store-filter.is-mobile .wm-store-filter-panel-body {
+  flex: 1;
+}
+
+.wm-store-filter.is-mobile.is-drawer-open .wm-store-filter-panel {
+  transform: translateX(0);
+  visibility: visible;
+}
+
+.wm-store-filter-backdrop {
+  position: fixed;
+  inset: var(--wm-store-filter-drawer-top, 0px) 0 0 0;
+  z-index: var(--wm-store-filter-z, 99999);
+  background: var(--wm-store-filter-backdrop, hsla(var(--black-hsl, 0, 0%, 0%), 0.45));
+  opacity: 0;
+  transition: opacity var(--wm-store-filter-transition, 0.25s cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.wm-store-filter.is-drawer-open .wm-store-filter-backdrop {
+  opacity: 1;
+}
+
+html.wm-store-filter-locked,
+html.wm-store-filter-locked body {
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wm-store-filter *,
+  .wm-store-filter *::before,
+  .wm-store-filter *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ================================
+   EDIT MODE
+   ================================ */
+
+/* Hiding the whole wrapper would hide the collection with it, since the
+   section's own grid lives inside it. Hide only what the plugin added, and
+   flatten the layout back to one column — the JS hands the markup back to
+   Squarespace a moment later anyway. */
+body.sqs-edit-mode-active .wm-store-filter-panel,
+body.sqs-edit-mode-active .wm-store-filter-backdrop,
+body.sqs-edit-mode-active .wm-store-filter-toolbar,
+body.sqs-edit-mode-active .wm-store-filter-pagination,
+body.sqs-edit-mode-active .wm-store-filter-empty {
+  display: none !important;
+}
+
+body.sqs-edit-mode-active .wm-store-filter-layout {
+  display: block;
+  margin-left: 0;
+  width: auto;
+}
