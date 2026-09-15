@@ -51,6 +51,9 @@
  * --wm-store-filter-pill-radius: 100px;
  * --wm-store-filter-price-thumb: 18px;   (slider handle size)
  * --wm-store-filter-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+ * --wm-store-filter-item-duration: 0.4s;   (how long a product takes to arrive)
+ * --wm-store-filter-item-stagger: 30ms;    (gap between one product and the next)
+ * --wm-store-filter-item-shift: 10px;      (how far it rises; 0 for a plain fade)
  *
  * Mobile overrides:
  * --wm-store-filter-gap-mobile: 20px;
@@ -867,6 +870,12 @@
   white-space: nowrap;
 }
 
+/* A pill that grew to list what was ticked would shunt every pill after it
+   along, so in the bar the accent border carries the selection instead. */
+.wm-store-filter[data-variant='dropdown'] .wm-store-filter-group-selected {
+  display: none;
+}
+
 .wm-store-filter[data-variant='dropdown'] .wm-store-filter-group.has-selection
   .wm-store-filter-group-toggle {
   border-color: var(--wm-store-filter-resolved-accent);
@@ -913,6 +922,29 @@
 .wm-store-filter[data-variant='dropdown'] .wm-store-filter-panel-footer {
   flex: 0 0 100%;
   margin-top: 0.2em;
+}
+
+/* Clear All sits under the filters, so it follows the row's alignment. */
+.wm-store-filter[data-variant='dropdown'][data-align='right']
+  .wm-store-filter-panel-footer,
+.wm-store-filter[data-variant='dropdown'][data-align='spread']
+  .wm-store-filter-panel-footer {
+  justify-content: flex-end;
+}
+
+.wm-store-filter[data-variant='dropdown'][data-align='center']
+  .wm-store-filter-panel-footer {
+  justify-content: center;
+}
+
+/* Spread with the search box last puts the pills on the left, so Clear All
+   goes back under them. */
+.wm-store-filter[data-variant='dropdown'][data-align='spread']
+  .wm-store-filter-panel:has(
+    .wm-store-filter-panel-body > .wm-store-filter-search:last-child
+  )
+  .wm-store-filter-panel-footer {
+  justify-content: flex-start;
 }
 
 /* ================================
@@ -1003,11 +1035,36 @@ html.wm-store-filter-locked body {
   overflow: hidden;
 }
 
+/* Filtering swaps the grid's contents outright, which reads as a jump. A
+   short staggered fade-and-rise makes the new set arrive instead. */
+@keyframes wm-store-filter-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--wm-store-filter-item-shift, 10px));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.wm-store-filter-content .wm-store-filter-item-in {
+  animation: wm-store-filter-item-in var(--wm-store-filter-item-duration, 0.4s)
+    cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation-delay: calc(
+    var(--wm-store-filter-item-index, 0) * var(--wm-store-filter-item-stagger, 30ms)
+  );
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wm-store-filter *,
   .wm-store-filter *::before,
   .wm-store-filter *::after {
     transition-duration: 0.01ms !important;
+  }
+
+  .wm-store-filter-content .wm-store-filter-item-in {
+    animation: none;
   }
 }
 

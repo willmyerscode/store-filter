@@ -118,8 +118,13 @@ The search box is `flex: 0 1 260px`; override `flex` on `.wm-store-filter-search
   --wm-store-filter-control-radius: 4px;
   --wm-store-filter-pill-radius: 100px;
   --wm-store-filter-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --wm-store-filter-item-duration: 0.4s;
+  --wm-store-filter-item-stagger: 30ms;
+  --wm-store-filter-item-shift: 10px;
 }
 ```
+
+Filtered products fade and rise into place one after another. `--wm-store-filter-item-duration` is how long each takes, `--wm-store-filter-item-stagger` the gap between them, and `--wm-store-filter-item-shift` how far each rises — set it to `0px` for a plain fade. Anyone browsing with reduced motion turned on gets no animation at all.
 
 `--wm-store-filter-font-size` sets the size of every word in the filters — option labels, counts, the search field, the result count and the buttons. `--wm-store-filter-title-font-size` covers the group headings and the drawer title on its own. To match your site's body copy, set the first one to `1rem` or whatever your paragraph size is.
 
@@ -387,12 +392,6 @@ All settings are optional. Place this snippet in the same **Page Header Code Inj
 <td>Screen width, in pixels, at or below which the filters become the slide-out drawer.</td>
 </tr>
 <tr>
-<td><code>maxPages</code></td>
-<td><code>number</code></td>
-<td><code>30</code></td>
-<td>Safety limit on how many pages of the collection are loaded up front.</td>
-</tr>
-<tr>
 <td><code>listSelector</code></td>
 <td><code>string</code></td>
 <td><code>null</code></td>
@@ -514,7 +513,7 @@ No — Store Filter is for stores only. On any other page it starts up, finds no
 <details class="wm-doc-toggle">
 <summary>Will this slow my page down?</summary>
 
-The page itself loads exactly as it did before — Squarespace still renders the first page of products normally. The plugin asks for the rest of the catalogue in the background, starting that request while the page is still loading so it overlaps rather than queues. On a very large store that is a handful of extra background requests; `maxPages` caps how far it will go.
+The page itself loads exactly as it did before — Squarespace still renders the first page of products normally. The plugin asks for the rest of the catalogue in the background, starting that request while the page is still loading so it overlaps rather than queues. Every page is loaded however large the store is, so a big catalogue means a few more background requests before the filters are ready; the products on screen are usable throughout.
 
 </details>
 

@@ -64,7 +64,6 @@ class WMStoreFilter {
     loadingText: 'Loading filters',
     mobileBreakpoint: 767,
     searchIncludesBody: false,
-    maxPages: 30,
     maxCategories: 25,
     listSelector: null, // override the grid container selector
     itemSelector: null // override the item selector
@@ -77,6 +76,9 @@ class WMStoreFilter {
     {name: 'products-classic', container: '.products.collection-content-wrapper', item: '.grid-item'},
     {name: 'products-grid', container: '.ProductList-grid', item: '.ProductList-item'}
   ];
+
+  /* How many items still stagger before they all animate together. */
+  static maxStagger = 12;
 
   static icons = {
     filter:
@@ -300,8 +302,13 @@ class WMStoreFilter {
 
     let url = this.collection.url;
     let page = 0;
+    /* However many pages the store has, they all get loaded — the only thing
+       that stops the loop early is pagination that points back at a page
+       already seen, which would otherwise spin forever. */
+    const seen = new Set();
 
-    while (url && page < this.settings.maxPages) {
+    while (url && !seen.has(url)) {
+      seen.add(url);
       /* The JSON and the markup for a page are two separate requests, so
          start them together rather than waiting for the first to land. */
       const nodesRequest = page > 0 ? this.fetchNodes(url) : null;
@@ -410,16 +417,16 @@ class WMStoreFilter {
   async fetchCategoryMembers(url) {
     const members = [];
     let next = url;
-    let page = 0;
+    const seen = new Set();
 
-    while (next && page < this.settings.maxPages) {
+    while (next && !seen.has(next)) {
+      seen.add(next);
       const json = await this.fetchJson(next);
       if (!json) break;
       (json.items || []).forEach(item => {
         members.push({id: item.id, url: this.normalizeUrl(item.fullUrl || '')});
       });
       next = this.getNextPageUrl(json.pagination, url);
-      page += 1;
     }
 
     return members;
@@ -1485,8 +1492,23 @@ class WMStoreFilter {
     const fragment = document.createDocumentFragment();
 
     this.getNativeNodes().forEach(node => node.remove());
-    visible.forEach(entry => fragment.appendChild(entry.node));
+    visible.forEach((entry, index) => {
+      /* Dropping the class before the reflow below is what lets the animation
+         play again on the next filter rather than only the first time. */
+      entry.node.classList.remove('wm-store-filter-item-in');
+      /* The stagger is capped so a long page still settles quickly. */
+      entry.node.style.setProperty(
+        '--wm-store-filter-item-index',
+        Math.min(index, WMStoreFilter.maxStagger)
+      );
+      fragment.appendChild(entry.node);
+    });
     container.appendChild(fragment);
+
+    /* Reading a layout property commits the removal, so re-adding the class
+       starts the animation from the top. */
+    void container.offsetHeight;
+    visible.forEach(entry => entry.node.classList.add('wm-store-filter-item-in'));
 
     const fresh = visible.filter(entry => !entry.node.dataset.wmStoreFilterReady);
     fresh.forEach(entry => {
