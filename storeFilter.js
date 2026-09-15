@@ -81,6 +81,10 @@ class WMStoreFilter {
   /* How many products still stagger before the rest arrive together. */
   static maxShuffleStagger = 12;
 
+  /* Fallback for clearing a departing product, in case the animation's own end
+     event never arrives — a tab that is not rendering never fires one. */
+  static leavingMs = 700;
+
   static icons = {
     filter:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M6 12h12M10 18h4"/></svg>',
@@ -106,6 +110,7 @@ class WMStoreFilter {
     this.collection = null;
     this.list = null; // {container, itemSelector, layout}
     this.categoryNames = new Map(); // category id -> display name
+    this.leaving = []; // products mid-way through shrinking off the grid
     this.entries = []; // [{id, url, node, categories, tags, price, searchText}]
     this.groups = []; // filter group models
     this.priceRange = null; // {min, max, step, currency}
@@ -1493,6 +1498,10 @@ class WMStoreFilter {
     const fragment = document.createDocumentFragment();
     const shuffle = this.settings.shuffle !== false;
 
+    /* Anything still shrinking away from the last change goes now, so a quick
+       second filter cannot leave ghosts behind. */
+    this.clearLeaving();
+
     /* Where every product sits before the grid is rebuilt. A product that
        survives the filter is then slid from its old place to its new one
        rather than blinking into position. */
@@ -1507,6 +1516,9 @@ class WMStoreFilter {
          play again on the next filter rather than only the first time. */
       entry.node.classList.remove('wm-store-filter-shuffle-in');
       entry.node.classList.remove('wm-store-filter-shuffle-move');
+      /* transitionend never arrives in a tab that is not rendering, so the
+         compositor hint is cleared here as well, where it is certain. */
+      entry.node.style.willChange = '';
       /* The stagger is capped so a long page still settles quickly. */
       entry.node.style.setProperty(
         '--wm-store-filter-shuffle-index',
@@ -1530,7 +1542,14 @@ class WMStoreFilter {
   playShuffle(container, visible, before) {
     const arriving = [];
     const moving = [];
+    const staying = new Set(visible.map(entry => entry.node));
 
+    this.sendOffLeaving(container, before, staying);
+
+    /* Measure every product first, then write to every product — interleaving
+       the two makes the browser re-run layout once per product, which a long
+       grid feels as a stutter. */
+    const offsets = [];
     visible.forEach(entry => {
       const node = entry.node;
       const start = before.get(node);
@@ -1542,12 +1561,15 @@ class WMStoreFilter {
       const end = node.getBoundingClientRect();
       const dx = Math.round(start.left - end.left);
       const dy = Math.round(start.top - end.top);
-      if (!dx && !dy) return;
+      if (dx || dy) offsets.push({node, dx, dy});
+    });
 
+    offsets.forEach(({node, dx, dy}) => {
       /* Hold the product at its old position, with no transition, so the jump
          itself is not what animates. */
       node.style.transition = 'none';
       node.style.transform = `translate(${dx}px, ${dy}px)`;
+      node.style.willChange = 'transform';
       moving.push(node);
     });
 
@@ -1560,7 +1582,63 @@ class WMStoreFilter {
       node.classList.add('wm-store-filter-shuffle-move');
       node.style.transition = '';
       node.style.transform = '';
+      node.addEventListener(
+        'transitionend',
+        () => {
+          node.style.willChange = '';
+        },
+        {once: true}
+      );
     });
+  }
+
+  /* A product on its way out is lifted out of the flow at the spot it already
+     occupied, so the rest of the grid closes up around it while it goes. */
+  sendOffLeaving(container, before, staying) {
+    const leaving = [...before.keys()].filter(node => !staying.has(node));
+    if (!leaving.length) return;
+
+    const frame = container.getBoundingClientRect();
+    if (window.getComputedStyle(container).position === 'static') {
+      container.style.position = 'relative';
+      this.loosenedContainer = true;
+    }
+
+    leaving.forEach(node => {
+      const box = before.get(node);
+      node.style.position = 'absolute';
+      node.style.left = `${Math.round(box.left - frame.left)}px`;
+      node.style.top = `${Math.round(box.top - frame.top)}px`;
+      node.style.width = `${Math.round(box.width)}px`;
+      node.style.height = `${Math.round(box.height)}px`;
+      node.style.pointerEvents = 'none';
+      node.classList.add('wm-store-filter-shuffle-out');
+      node.addEventListener('animationend', () => this.clearLeaving(), {once: true});
+      container.appendChild(node);
+    });
+
+    this.leaving = leaving;
+    this.leavingTimer = window.setTimeout(() => this.clearLeaving(), WMStoreFilter.leavingMs);
+  }
+
+  clearLeaving() {
+    window.clearTimeout(this.leavingTimer);
+    (this.leaving || []).forEach(node => {
+      node.remove();
+      node.classList.remove('wm-store-filter-shuffle-out');
+      node.style.position = '';
+      node.style.left = '';
+      node.style.top = '';
+      node.style.width = '';
+      node.style.height = '';
+      node.style.pointerEvents = '';
+    });
+    this.leaving = [];
+
+    if (this.loosenedContainer && this.list) {
+      this.list.container.style.position = '';
+      this.loosenedContainer = false;
+    }
   }
 
   renderPagination(total, totalPages) {
@@ -2151,6 +2229,7 @@ class WMStoreFilter {
   }
 
   destroy() {
+    this.clearLeaving();
     this.removeGlobalListeners();
     if (this.editorObserver) this.editorObserver.disconnect();
     if (this.hasLoaded) this.restoreNativeList(this.entries.map(entry => entry.node));
