@@ -55,9 +55,10 @@
  * --wm-store-filter-shuffle-duration: 0.45s;  (the glide, the growing and the going)
  * --wm-store-filter-shuffle-ease: cubic-bezier(0.25, 0.46, 0.3, 1);
  * --wm-store-filter-shuffle-stagger: 0ms;     (gap between one product and the next)
- * --wm-store-filter-shuffle-scale: 0.92;      (how small a product starts and ends;
- *   0.001 is the hard pop an Isotope grid gives you)
- * --wm-store-filter-shuffle-shift: 0px;       (how far it rises, if you want that)
+ * --wm-store-filter-shuffle-scale: 1;         (products keep their size and simply
+ *   fade; drop it below 1 to have them grow and shrink as well)
+ * --wm-store-filter-shuffle-shift: 28px;      (how far an arriving product rises
+ *   into place; 0 makes it fade in where it lands)
  *
  * Mobile overrides:
  * --wm-store-filter-gap-mobile: 20px;
@@ -1044,8 +1045,8 @@ html.wm-store-filter-locked body {
 @keyframes wm-store-filter-shuffle-in {
   from {
     opacity: 0;
-    transform: translateY(var(--wm-store-filter-shuffle-shift, 0px))
-      scale(var(--wm-store-filter-shuffle-scale, 0.92));
+    transform: translateY(var(--wm-store-filter-shuffle-shift, 28px))
+      scale(var(--wm-store-filter-shuffle-scale, 1));
   }
   to {
     opacity: 1;
@@ -1060,11 +1061,13 @@ html.wm-store-filter-locked body {
   }
   to {
     opacity: 0;
-    transform: scale(var(--wm-store-filter-shuffle-scale, 0.92));
+    transform: scale(var(--wm-store-filter-shuffle-scale, 1));
   }
 }
 
-/* A product new to the view grows into place from nothing. */
+/* A product new to the view rises into place from below as it fades. It has no
+   previous position to travel from the way a product already on screen does, so
+   the rise stands in for the journey it would otherwise have made. */
 .wm-store-filter-content .wm-store-filter-shuffle-in {
   animation: wm-store-filter-shuffle-in var(--wm-store-filter-shuffle-duration, 0.45s)
     var(--wm-store-filter-shuffle-ease, cubic-bezier(0.25, 0.46, 0.3, 1)) both;
@@ -1075,8 +1078,25 @@ html.wm-store-filter-locked body {
   will-change: opacity, transform;
 }
 
-/* A product the filter drops shrinks away where it stood. JS lifts it out of
-   the flow first, so the grid closes up around it at the same time. */
+/* A product coming back from a place the grid remembers travels like one that
+   never left, so it only needs to fade in on the way. */
+@keyframes wm-store-filter-shuffle-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.wm-store-filter-content .wm-store-filter-shuffle-return {
+  animation: wm-store-filter-shuffle-fade
+    var(--wm-store-filter-shuffle-duration, 0.45s)
+    var(--wm-store-filter-shuffle-ease, cubic-bezier(0.25, 0.46, 0.3, 1)) both;
+}
+
+/* A product the filter drops fades out where it stood. JS lifts it out of the
+   flow first, so the grid closes up around it at the same time. */
 .wm-store-filter-content .wm-store-filter-shuffle-out {
   z-index: 0;
   animation: wm-store-filter-shuffle-out var(--wm-store-filter-shuffle-duration, 0.45s)
@@ -1101,7 +1121,8 @@ html.wm-store-filter-locked body {
   }
 
   .wm-store-filter-content .wm-store-filter-shuffle-in,
-  .wm-store-filter-content .wm-store-filter-shuffle-out {
+  .wm-store-filter-content .wm-store-filter-shuffle-out,
+  .wm-store-filter-content .wm-store-filter-shuffle-return {
     animation: none;
   }
 

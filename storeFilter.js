@@ -111,6 +111,7 @@ class WMStoreFilter {
     this.list = null; // {container, itemSelector, layout}
     this.categoryNames = new Map(); // category id -> display name
     this.leaving = []; // products mid-way through shrinking off the grid
+    this.lastSeen = new WeakMap(); // product -> where it last sat in the grid
     this.entries = []; // [{id, url, node, categories, tags, price, searchText}]
     this.groups = []; // filter group models
     this.priceRange = null; // {min, max, step, currency}
@@ -1516,6 +1517,7 @@ class WMStoreFilter {
          play again on the next filter rather than only the first time. */
       entry.node.classList.remove('wm-store-filter-shuffle-in');
       entry.node.classList.remove('wm-store-filter-shuffle-move');
+      entry.node.classList.remove('wm-store-filter-shuffle-return');
       /* transitionend never arrives in a tab that is not rendering, so the
          compositor hint is cleared here as well, where it is certain. */
       entry.node.style.willChange = '';
@@ -1549,20 +1551,46 @@ class WMStoreFilter {
     /* Measure every product first, then write to every product — interleaving
        the two makes the browser re-run layout once per product, which a long
        grid feels as a stutter. */
+    const frame = container.getBoundingClientRect();
     const offsets = [];
+    const places = [];
+    const returning = [];
+
     visible.forEach(entry => {
       const node = entry.node;
-      const start = before.get(node);
-      if (!start) {
+      const end = node.getBoundingClientRect();
+      /* Positions are kept relative to the grid, so scrolling between one
+         filter and the next cannot corrupt them. */
+      const spot = {x: end.left - frame.left, y: end.top - frame.top};
+      places.push({node, spot});
+
+      const onScreen = before.get(node);
+      /* A product the filter had dropped is not on screen to measure, but the
+         grid remembers where it last sat — so it flies back from there rather
+         than appearing out of nowhere. */
+      const remembered = this.lastSeen.get(node);
+      const from = onScreen
+        ? {x: onScreen.left - frame.left, y: onScreen.top - frame.top}
+        : remembered;
+
+      if (!from) {
         arriving.push(node);
         return;
       }
 
-      const end = node.getBoundingClientRect();
-      const dx = Math.round(start.left - end.left);
-      const dy = Math.round(start.top - end.top);
-      if (dx || dy) offsets.push({node, dx, dy});
+      const dx = Math.round(from.x - spot.x);
+      const dy = Math.round(from.y - spot.y);
+      if (dx || dy) {
+        offsets.push({node, dx, dy});
+        /* It travels like a product that stayed, but it also has to appear. */
+        if (!onScreen) returning.push(node);
+      } else if (!onScreen) {
+        /* Back in the same slot it left from: nothing to travel, so fade. */
+        arriving.push(node);
+      }
     });
+
+    places.forEach(({node, spot}) => this.lastSeen.set(node, spot));
 
     offsets.forEach(({node, dx, dy}) => {
       /* Hold the product at its old position, with no transition, so the jump
@@ -1578,6 +1606,7 @@ class WMStoreFilter {
     void container.offsetHeight;
 
     arriving.forEach(node => node.classList.add('wm-store-filter-shuffle-in'));
+    returning.forEach(node => node.classList.add('wm-store-filter-shuffle-return'));
     moving.forEach(node => {
       node.classList.add('wm-store-filter-shuffle-move');
       node.style.transition = '';
@@ -1606,6 +1635,14 @@ class WMStoreFilter {
 
     leaving.forEach(node => {
       const box = before.get(node);
+      /* Whatever it was doing on the way in is over — otherwise that animation
+         and this one fight over the same product. */
+      node.classList.remove('wm-store-filter-shuffle-in');
+      node.classList.remove('wm-store-filter-shuffle-move');
+      node.classList.remove('wm-store-filter-shuffle-return');
+      node.style.transition = '';
+      node.style.transform = '';
+      node.style.willChange = '';
       node.style.position = 'absolute';
       node.style.left = `${Math.round(box.left - frame.left)}px`;
       node.style.top = `${Math.round(box.top - frame.top)}px`;
