@@ -118,13 +118,15 @@ The search box is `flex: 0 1 260px`; override `flex` on `.wm-store-filter-search
   --wm-store-filter-control-radius: 4px;
   --wm-store-filter-pill-radius: 100px;
   --wm-store-filter-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  --wm-store-filter-item-duration: 0.4s;
-  --wm-store-filter-item-stagger: 30ms;
-  --wm-store-filter-item-shift: 10px;
+  --wm-store-filter-shuffle-duration: 0.52s;
+  --wm-store-filter-shuffle-ease: cubic-bezier(0.22, 1.2, 0.36, 1);
+  --wm-store-filter-shuffle-stagger: 18ms;
+  --wm-store-filter-shuffle-scale: 0.94;
+  --wm-store-filter-shuffle-shift: 0px;
 }
 ```
 
-Filtered products fade and rise into place one after another. `--wm-store-filter-item-duration` is how long each takes, `--wm-store-filter-item-stagger` the gap between them, and `--wm-store-filter-item-shift` how far each rises — set it to `0px` for a plain fade. Anyone browsing with reduced motion turned on gets no animation at all.
+When the filters change, products already on screen slide to their new places and products arriving swell into theirs. `--wm-store-filter-shuffle-duration` covers both, `--wm-store-filter-shuffle-ease` is the curve that carries a product a hair past its slot and back, `--wm-store-filter-shuffle-stagger` is the gap between one arrival and the next, and `--wm-store-filter-shuffle-scale` how small a new product starts. Set `--wm-store-filter-shuffle-shift` if you would rather they rose into place than swelled. Anyone browsing with reduced motion turned on gets none of it, and the `shuffle` setting turns it off for everybody.
 
 `--wm-store-filter-font-size` sets the size of every word in the filters — option labels, counts, the search field, the result count and the buttons. `--wm-store-filter-title-font-size` covers the group headings and the drawer title on its own. To match your site's body copy, set the first one to `1rem` or whatever your paragraph size is.
 
@@ -270,6 +272,12 @@ All settings are optional. Place this snippet in the same **Page Header Code Inj
 <td><code>string</code></td>
 <td><code>"list"</code></td>
 <td>How the options are drawn. <code>"list"</code> is a column of tick boxes. <code>"buttons"</code> lays them out as pills that wrap across the panel. One group can override this with its own <code>style</code>.</td>
+</tr>
+<tr>
+<td><code>shuffle</code></td>
+<td><code>boolean</code></td>
+<td><code>true</code></td>
+<td>Animates the grid rearranging itself when the filters change. <code>false</code> redraws it instantly.</td>
 </tr>
 <tr>
 <td><code>collapsible</code></td>

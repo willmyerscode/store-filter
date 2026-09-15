@@ -51,9 +51,12 @@
  * --wm-store-filter-pill-radius: 100px;
  * --wm-store-filter-price-thumb: 18px;   (slider handle size)
  * --wm-store-filter-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
- * --wm-store-filter-item-duration: 0.4s;   (how long a product takes to arrive)
- * --wm-store-filter-item-stagger: 30ms;    (gap between one product and the next)
- * --wm-store-filter-item-shift: 10px;      (how far it rises; 0 for a plain fade)
+ * The shuffle — how the grid rearranges itself when the filters change:
+ * --wm-store-filter-shuffle-duration: 0.52s;  (both the glide and the swell)
+ * --wm-store-filter-shuffle-ease: cubic-bezier(0.22, 1.2, 0.36, 1);
+ * --wm-store-filter-shuffle-stagger: 18ms;    (gap between one product and the next)
+ * --wm-store-filter-shuffle-scale: 0.94;      (how small a new product starts)
+ * --wm-store-filter-shuffle-shift: 0px;       (how far it rises, if you want that)
  *
  * Mobile overrides:
  * --wm-store-filter-gap-mobile: 20px;
@@ -1037,10 +1040,11 @@ html.wm-store-filter-locked body {
 
 /* Filtering swaps the grid's contents outright, which reads as a jump. A
    short staggered fade-and-rise makes the new set arrive instead. */
-@keyframes wm-store-filter-item-in {
+@keyframes wm-store-filter-shuffle-in {
   from {
     opacity: 0;
-    transform: translateY(var(--wm-store-filter-item-shift, 10px));
+    transform: translateY(var(--wm-store-filter-shuffle-shift, 0px))
+      scale(var(--wm-store-filter-shuffle-scale, 0.94));
   }
   to {
     opacity: 1;
@@ -1048,12 +1052,25 @@ html.wm-store-filter-locked body {
   }
 }
 
-.wm-store-filter-content .wm-store-filter-item-in {
-  animation: wm-store-filter-item-in var(--wm-store-filter-item-duration, 0.4s)
-    cubic-bezier(0.4, 0, 0.2, 1) both;
+/* A product new to the view swells into place rather than travelling, which
+   keeps a tall grid calm while everything else is moving. */
+.wm-store-filter-content .wm-store-filter-shuffle-in {
+  animation: wm-store-filter-shuffle-in var(--wm-store-filter-shuffle-duration, 0.52s)
+    var(--wm-store-filter-shuffle-ease, cubic-bezier(0.22, 1.2, 0.36, 1)) both;
   animation-delay: calc(
-    var(--wm-store-filter-item-index, 0) * var(--wm-store-filter-item-stagger, 30ms)
+    var(--wm-store-filter-shuffle-index, 0) *
+      var(--wm-store-filter-shuffle-stagger, 18ms)
   );
+}
+
+/* A product that survives the filter keeps its place in the grid by sliding
+   to it — JS pins it at its old position and clears that offset, and this is
+   what turns the clearing into a glide. The easing carries it a hair past the
+   new slot and back, so the grid settles rather than snapping. */
+.wm-store-filter-content .wm-store-filter-shuffle-move {
+  transition: transform var(--wm-store-filter-shuffle-duration, 0.52s)
+    var(--wm-store-filter-shuffle-ease, cubic-bezier(0.22, 1.2, 0.36, 1));
+  will-change: transform;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1063,8 +1080,12 @@ html.wm-store-filter-locked body {
     transition-duration: 0.01ms !important;
   }
 
-  .wm-store-filter-content .wm-store-filter-item-in {
+  .wm-store-filter-content .wm-store-filter-shuffle-in {
     animation: none;
+  }
+
+  .wm-store-filter-content .wm-store-filter-shuffle-move {
+    transition: none;
   }
 }
 

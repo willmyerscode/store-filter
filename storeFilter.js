@@ -36,6 +36,7 @@ class WMStoreFilter {
     multiSelect: true, // default for auto built groups
     matchMode: 'any', // 'any' | 'all' — default when multiple options are selected
     optionStyle: 'list', // 'list' (tick boxes) | 'buttons' (pills). Per group: style: 'buttons'
+    shuffle: true, // animate the grid rearranging itself when the filters change
     mobileLayout: 'drawer', // 'drawer' (filter icon + slide-out) | 'top' (row of dropdowns)
     topAlignment: 'spread', // top layout only: 'spread' | 'left' | 'right' | 'center'
     collapsible: true,
@@ -77,8 +78,8 @@ class WMStoreFilter {
     {name: 'products-grid', container: '.ProductList-grid', item: '.ProductList-item'}
   ];
 
-  /* How many items still stagger before they all animate together. */
-  static maxStagger = 12;
+  /* How many products still stagger before the rest arrive together. */
+  static maxShuffleStagger = 12;
 
   static icons = {
     filter:
@@ -1490,31 +1491,76 @@ class WMStoreFilter {
   renderItems(visible) {
     const container = this.list.container;
     const fragment = document.createDocumentFragment();
+    const shuffle = this.settings.shuffle !== false;
 
-    this.getNativeNodes().forEach(node => node.remove());
+    /* Where every product sits before the grid is rebuilt. A product that
+       survives the filter is then slid from its old place to its new one
+       rather than blinking into position. */
+    const before = new Map();
+    this.getNativeNodes().forEach(node => {
+      if (shuffle) before.set(node, node.getBoundingClientRect());
+      node.remove();
+    });
+
     visible.forEach((entry, index) => {
       /* Dropping the class before the reflow below is what lets the animation
          play again on the next filter rather than only the first time. */
-      entry.node.classList.remove('wm-store-filter-item-in');
+      entry.node.classList.remove('wm-store-filter-shuffle-in');
+      entry.node.classList.remove('wm-store-filter-shuffle-move');
       /* The stagger is capped so a long page still settles quickly. */
       entry.node.style.setProperty(
-        '--wm-store-filter-item-index',
-        Math.min(index, WMStoreFilter.maxStagger)
+        '--wm-store-filter-shuffle-index',
+        Math.min(index, WMStoreFilter.maxShuffleStagger)
       );
       fragment.appendChild(entry.node);
     });
     container.appendChild(fragment);
 
-    /* Reading a layout property commits the removal, so re-adding the class
-       starts the animation from the top. */
-    void container.offsetHeight;
-    visible.forEach(entry => entry.node.classList.add('wm-store-filter-item-in'));
+    if (shuffle) this.playShuffle(container, visible, before);
 
     const fresh = visible.filter(entry => !entry.node.dataset.wmStoreFilterReady);
     fresh.forEach(entry => {
       entry.node.dataset.wmStoreFilterReady = 'true';
     });
     if (fresh.length) this.hydrateNodes(fresh.map(entry => entry.node));
+  }
+
+  /* Products that were on screen before the filter changed slide to their new
+     places; products new to the view swell into them. */
+  playShuffle(container, visible, before) {
+    const arriving = [];
+    const moving = [];
+
+    visible.forEach(entry => {
+      const node = entry.node;
+      const start = before.get(node);
+      if (!start) {
+        arriving.push(node);
+        return;
+      }
+
+      const end = node.getBoundingClientRect();
+      const dx = Math.round(start.left - end.left);
+      const dy = Math.round(start.top - end.top);
+      if (!dx && !dy) return;
+
+      /* Hold the product at its old position, with no transition, so the jump
+         itself is not what animates. */
+      node.style.transition = 'none';
+      node.style.transform = `translate(${dx}px, ${dy}px)`;
+      moving.push(node);
+    });
+
+    /* Reading a layout property commits both the removals and the offsets
+       above, so what follows animates from them. */
+    void container.offsetHeight;
+
+    arriving.forEach(node => node.classList.add('wm-store-filter-shuffle-in'));
+    moving.forEach(node => {
+      node.classList.add('wm-store-filter-shuffle-move');
+      node.style.transition = '';
+      node.style.transform = '';
+    });
   }
 
   renderPagination(total, totalPages) {
