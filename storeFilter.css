@@ -52,10 +52,11 @@
  * --wm-store-filter-price-thumb: 18px;   (slider handle size)
  * --wm-store-filter-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
  * The shuffle — how the grid rearranges itself when the filters change:
- * --wm-store-filter-shuffle-duration: 0.4s;   (the glide, the growing and the going)
- * --wm-store-filter-shuffle-ease: ease;
+ * --wm-store-filter-shuffle-duration: 0.45s;  (the glide, the growing and the going)
+ * --wm-store-filter-shuffle-ease: cubic-bezier(0.25, 0.46, 0.3, 1);
  * --wm-store-filter-shuffle-stagger: 0ms;     (gap between one product and the next)
- * --wm-store-filter-shuffle-scale: 0.001;     (how small a product starts and ends)
+ * --wm-store-filter-shuffle-scale: 0.92;      (how small a product starts and ends;
+ *   0.001 is the hard pop an Isotope grid gives you)
  * --wm-store-filter-shuffle-shift: 0px;       (how far it rises, if you want that)
  *
  * Mobile overrides:
@@ -1044,7 +1045,7 @@ html.wm-store-filter-locked body {
   from {
     opacity: 0;
     transform: translateY(var(--wm-store-filter-shuffle-shift, 0px))
-      scale(var(--wm-store-filter-shuffle-scale, 0.001));
+      scale(var(--wm-store-filter-shuffle-scale, 0.92));
   }
   to {
     opacity: 1;
@@ -1059,14 +1060,14 @@ html.wm-store-filter-locked body {
   }
   to {
     opacity: 0;
-    transform: scale(var(--wm-store-filter-shuffle-scale, 0.001));
+    transform: scale(var(--wm-store-filter-shuffle-scale, 0.92));
   }
 }
 
 /* A product new to the view grows into place from nothing. */
 .wm-store-filter-content .wm-store-filter-shuffle-in {
-  animation: wm-store-filter-shuffle-in var(--wm-store-filter-shuffle-duration, 0.4s)
-    var(--wm-store-filter-shuffle-ease, ease) both;
+  animation: wm-store-filter-shuffle-in var(--wm-store-filter-shuffle-duration, 0.45s)
+    var(--wm-store-filter-shuffle-ease, cubic-bezier(0.25, 0.46, 0.3, 1)) both;
   animation-delay: calc(
     var(--wm-store-filter-shuffle-index, 0) *
       var(--wm-store-filter-shuffle-stagger, 0ms)
@@ -1078,8 +1079,8 @@ html.wm-store-filter-locked body {
    the flow first, so the grid closes up around it at the same time. */
 .wm-store-filter-content .wm-store-filter-shuffle-out {
   z-index: 0;
-  animation: wm-store-filter-shuffle-out var(--wm-store-filter-shuffle-duration, 0.4s)
-    var(--wm-store-filter-shuffle-ease, ease) both;
+  animation: wm-store-filter-shuffle-out var(--wm-store-filter-shuffle-duration, 0.45s)
+    var(--wm-store-filter-shuffle-ease, cubic-bezier(0.25, 0.46, 0.3, 1)) both;
   will-change: opacity, transform;
 }
 
@@ -1088,8 +1089,8 @@ html.wm-store-filter-locked body {
    what turns the clearing into a glide. The easing carries it a hair past the
    new slot and back, so the grid settles rather than snapping. */
 .wm-store-filter-content .wm-store-filter-shuffle-move {
-  transition: transform var(--wm-store-filter-shuffle-duration, 0.4s)
-    var(--wm-store-filter-shuffle-ease, ease);
+  transition: transform var(--wm-store-filter-shuffle-duration, 0.45s)
+    var(--wm-store-filter-shuffle-ease, cubic-bezier(0.25, 0.46, 0.3, 1));
 }
 
 @media (prefers-reduced-motion: reduce) {

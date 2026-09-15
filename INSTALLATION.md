@@ -118,15 +118,15 @@ The search box is `flex: 0 1 260px`; override `flex` on `.wm-store-filter-search
   --wm-store-filter-control-radius: 4px;
   --wm-store-filter-pill-radius: 100px;
   --wm-store-filter-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  --wm-store-filter-shuffle-duration: 0.4s;
-  --wm-store-filter-shuffle-ease: ease;
+  --wm-store-filter-shuffle-duration: 0.45s;
+  --wm-store-filter-shuffle-ease: cubic-bezier(0.25, 0.46, 0.3, 1);
   --wm-store-filter-shuffle-stagger: 0ms;
-  --wm-store-filter-shuffle-scale: 0.001;
+  --wm-store-filter-shuffle-scale: 0.92;
   --wm-store-filter-shuffle-shift: 0px;
 }
 ```
 
-When the filters change, products the filter drops shrink away where they stood, products already on screen slide to their new places, and products arriving grow into theirs — all at once. `--wm-store-filter-shuffle-duration` covers all three, `--wm-store-filter-shuffle-scale` is how small a product starts and ends, and `--wm-store-filter-shuffle-stagger` adds a gap between one arrival and the next if you want them to land in sequence. Set `--wm-store-filter-shuffle-shift` if arrivals should rise into place as well. Anyone browsing with reduced motion turned on gets none of it, and the `shuffle` setting turns it off for everybody.
+When the filters change, products the filter drops shrink away where they stood, products already on screen slide to their new places, and products arriving grow into theirs — all at once. `--wm-store-filter-shuffle-duration` covers all three, `--wm-store-filter-shuffle-scale` is how small a product starts and ends — drop it to `0.001` for a hard pop — and `--wm-store-filter-shuffle-stagger` adds a gap between one arrival and the next if you want them to land in sequence. Set `--wm-store-filter-shuffle-shift` if arrivals should rise into place as well. Anyone browsing with reduced motion turned on gets none of it, and the `shuffle` setting turns it off for everybody.
 
 `--wm-store-filter-font-size` sets the size of every word in the filters — option labels, counts, the search field, the result count and the buttons. `--wm-store-filter-title-font-size` covers the group headings and the drawer title on its own. To match your site's body copy, set the first one to `1rem` or whatever your paragraph size is.
 
