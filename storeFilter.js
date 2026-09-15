@@ -83,7 +83,7 @@ class WMStoreFilter {
 
   /* Fallback for clearing a departing product, in case the animation's own end
      event never arrives — a tab that is not rendering never fires one. */
-  static leavingMs = 700;
+  static leavingMs = 600;
 
   static icons = {
     filter:
@@ -1503,14 +1503,34 @@ class WMStoreFilter {
        second filter cannot leave ghosts behind. */
     this.clearLeaving();
 
-    /* Where every product sits before the grid is rebuilt. A product that
-       survives the filter is then slid from its old place to its new one
-       rather than blinking into position. */
+    /* Where every product sits before the grid is rebuilt, measured against the
+       grid's own origin at that same moment. Rebuilding can shorten the page
+       enough that the browser clamps the scroll, which moves the grid under
+       the viewport — so a position captured against the old origin and read
+       against the new one lands a product somewhere it never was. */
     const before = new Map();
-    this.getNativeNodes().forEach(node => {
-      if (shuffle) before.set(node, node.getBoundingClientRect());
-      node.remove();
-    });
+    const current = this.getNativeNodes();
+
+    if (shuffle) {
+      /* Every measurement happens before a single product is removed. Removing
+         them shortens the page, and once it is short enough the browser clamps
+         the scroll — so a measurement taken mid-removal is against a viewport
+         that has already moved, and the products further down the grid are the
+         ones that end up misplaced. */
+      const framed = container.getBoundingClientRect();
+      const boxes = current.map(node => node.getBoundingClientRect());
+      current.forEach((node, index) => {
+        const box = boxes[index];
+        before.set(node, {
+          x: box.left - framed.left,
+          y: box.top - framed.top,
+          width: box.width,
+          height: box.height
+        });
+      });
+    }
+
+    current.forEach(node => node.remove());
 
     visible.forEach((entry, index) => {
       /* Dropping the class before the reflow below is what lets the animation
@@ -1567,11 +1587,8 @@ class WMStoreFilter {
       const onScreen = before.get(node);
       /* A product the filter had dropped is not on screen to measure, but the
          grid remembers where it last sat — so it flies back from there rather
-         than appearing out of nowhere. */
-      const remembered = this.lastSeen.get(node);
-      const from = onScreen
-        ? {x: onScreen.left - frame.left, y: onScreen.top - frame.top}
-        : remembered;
+         than appearing out of nowhere. Both are already grid-relative. */
+      const from = onScreen || this.lastSeen.get(node);
 
       if (!from) {
         arriving.push(node);
@@ -1627,7 +1644,6 @@ class WMStoreFilter {
     const leaving = [...before.keys()].filter(node => !staying.has(node));
     if (!leaving.length) return;
 
-    const frame = container.getBoundingClientRect();
     if (window.getComputedStyle(container).position === 'static') {
       container.style.position = 'relative';
       this.loosenedContainer = true;
@@ -1644,8 +1660,8 @@ class WMStoreFilter {
       node.style.transform = '';
       node.style.willChange = '';
       node.style.position = 'absolute';
-      node.style.left = `${Math.round(box.left - frame.left)}px`;
-      node.style.top = `${Math.round(box.top - frame.top)}px`;
+      node.style.left = `${Math.round(box.x)}px`;
+      node.style.top = `${Math.round(box.y)}px`;
       node.style.width = `${Math.round(box.width)}px`;
       node.style.height = `${Math.round(box.height)}px`;
       node.style.pointerEvents = 'none';

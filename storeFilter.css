@@ -57,6 +57,9 @@
  * --wm-store-filter-shuffle-stagger: 0ms;     (gap between one product and the next)
  * --wm-store-filter-shuffle-scale: 1;         (products keep their size and simply
  *   fade; drop it below 1 to have them grow and shrink as well)
+ * --wm-store-filter-shuffle-exit-duration: 0.22s;  (a product leaves faster than
+ *   the others move, so it is gone before one arrives in its place)
+ * --wm-store-filter-shuffle-exit-scale: 0.94;  (how far it shrinks as it goes)
  * --wm-store-filter-shuffle-shift: 28px;      (how far an arriving product rises
  *   into place; 0 makes it fade in where it lands)
  *
@@ -1061,7 +1064,7 @@ html.wm-store-filter-locked body {
   }
   to {
     opacity: 0;
-    transform: scale(var(--wm-store-filter-shuffle-scale, 1));
+    transform: scale(var(--wm-store-filter-shuffle-exit-scale, 0.94));
   }
 }
 
@@ -1098,10 +1101,21 @@ html.wm-store-filter-locked body {
 /* A product the filter drops fades out where it stood. JS lifts it out of the
    flow first, so the grid closes up around it at the same time. */
 .wm-store-filter-content .wm-store-filter-shuffle-out {
+  /* A product on its way out is briefly standing in a slot another product is
+     moving into, so it goes quickly and passes underneath rather than over. */
   z-index: 0;
-  animation: wm-store-filter-shuffle-out var(--wm-store-filter-shuffle-duration, 0.45s)
+  animation: wm-store-filter-shuffle-out
+    var(--wm-store-filter-shuffle-exit-duration, 0.22s)
     var(--wm-store-filter-shuffle-ease, cubic-bezier(0.25, 0.46, 0.3, 1)) both;
   will-change: opacity, transform;
+}
+
+/* Products that are staying or arriving pass over anything on its way out. */
+.wm-store-filter-content .wm-store-filter-shuffle-move,
+.wm-store-filter-content .wm-store-filter-shuffle-in,
+.wm-store-filter-content .wm-store-filter-shuffle-return {
+  position: relative;
+  z-index: 1;
 }
 
 /* A product that survives the filter keeps its place in the grid by sliding
