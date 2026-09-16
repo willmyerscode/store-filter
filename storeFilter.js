@@ -111,6 +111,7 @@ class WMStoreFilter {
     this.list = null; // {container, itemSelector, layout}
     this.categoryNames = new Map(); // category id -> display name
     this.leaving = []; // products mid-way through shrinking off the grid
+    this.drawnPage = null; // the page number the grid currently shows
     this.lastSeen = new WeakMap(); // product -> where it last sat in the grid
     this.entries = []; // [{id, url, node, categories, tags, price, searchText}]
     this.groups = []; // filter group models
@@ -1565,6 +1566,8 @@ class WMStoreFilter {
     const arriving = [];
     const moving = [];
     const staying = new Set(visible.map(entry => entry.node));
+    const turnedPage = this.drawnPage !== null && this.drawnPage !== this.state.page;
+    this.drawnPage = this.state.page;
 
     this.sendOffLeaving(container, before, staying);
 
@@ -1575,6 +1578,13 @@ class WMStoreFilter {
     const offsets = [];
     const places = [];
     const returning = [];
+
+    /* The band of the grid the shopper can actually see, in the grid's own
+       coordinates. A product travelling from far below it would spend most of
+       the animation off screen — a long pause, then a rush — so its journey
+       starts at the edge of what is visible instead. */
+    const viewTop = -frame.top;
+    const viewBottom = viewTop + (window.innerHeight || document.documentElement.clientHeight);
 
     visible.forEach(entry => {
       const node = entry.node;
@@ -1587,16 +1597,21 @@ class WMStoreFilter {
       const onScreen = before.get(node);
       /* A product the filter had dropped is not on screen to measure, but the
          grid remembers where it last sat — so it flies back from there rather
-         than appearing out of nowhere. Both are already grid-relative. */
-      const from = onScreen || this.lastSeen.get(node);
+         than appearing out of nowhere. Both are already grid-relative.
+
+         Turning the page is different: the products are a fresh cast, and a
+         place one of them held on another page is not somewhere it can
+         meaningfully travel from. They arrive instead. */
+      const from = onScreen || (turnedPage ? null : this.lastSeen.get(node));
 
       if (!from) {
         arriving.push(node);
         return;
       }
 
+      const startY = Math.min(Math.max(from.y, viewTop - end.height), viewBottom);
       const dx = Math.round(from.x - spot.x);
-      const dy = Math.round(from.y - spot.y);
+      const dy = Math.round(startY - spot.y);
       if (dx || dy) {
         offsets.push({node, dx, dy});
         /* It travels like a product that stayed, but it also has to appear. */
@@ -1872,8 +1887,11 @@ class WMStoreFilter {
       const value = parseInt(page.dataset.page, 10);
       if (Number.isNaN(value)) return;
       this.state.page = value;
-      this.render();
+      /* Scrolling before the redraw keeps the two apart. A smooth scroll
+         running underneath the shuffle moves the ground the products are
+         animating against, which is what makes it look broken. */
       this.scrollToTop();
+      this.render();
     };
     this.elements.pagination.addEventListener('click', this.onPaginationClick);
 
@@ -2161,7 +2179,12 @@ class WMStoreFilter {
     const header = document.querySelector('#header');
     const offset = header ? header.offsetHeight : 0;
     const top = this.root.getBoundingClientRect().top + window.scrollY - offset - 20;
-    window.scrollTo({top: Math.max(top, 0), behavior: 'smooth'});
+    const already = Math.abs(window.scrollY - Math.max(top, 0)) < 2;
+    if (already) return;
+
+    /* Jumping rather than gliding: the products are about to animate, and two
+       motions at once read as one broken one. */
+    window.scrollTo({top: Math.max(top, 0), behavior: 'auto'});
   }
 
   /* ================================
