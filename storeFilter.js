@@ -52,6 +52,17 @@ class WMStoreFilter {
       nextText: 'Next',
       scrollToTop: true
     },
+    sort: true, // a sort menu above the products
+    sortLabel: 'Sort',
+    sortOptions: ['newest', 'price-asc', 'price-desc', 'name-asc', 'name-desc'], // 'featured' = store order
+    sortText: {
+      featured: 'Featured',
+      newest: 'Newest',
+      'price-asc': 'Price, low to high',
+      'price-desc': 'Price, high to low',
+      'name-asc': 'Name, A–Z',
+      'name-desc': 'Name, Z–A'
+    },
     showResultCount: true,
     showOptionCounts: true,
     resultCountText: '{count} Results',
@@ -66,6 +77,8 @@ class WMStoreFilter {
     mobileBreakpoint: 767,
     searchIncludesBody: false,
     maxCategories: 25,
+    showSubcategories: true, // false offers top level categories only
+    subcategoriesStartOpen: false, // show nested options before their parent is opened
     listSelector: null, // override the grid container selector
     itemSelector: null // override the item selector
   };
@@ -90,6 +103,8 @@ class WMStoreFilter {
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M6 12h12M10 18h4"/></svg>',
     search:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+    sort:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/></svg>',
     chevron:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
     close:
@@ -109,14 +124,16 @@ class WMStoreFilter {
 
     this.collection = null;
     this.list = null; // {container, itemSelector, layout}
-    this.categoryNames = new Map(); // category id -> display name
+    this.categoryInfo = new Map(); // category id -> {label, path}
+    this.categoryTree = new Map(); // category path, e.g. "men/shirts" -> {value, label, path, order}
+    this.expanded = new Map(); // group key -> Set of parent options showing their children
     this.leaving = []; // products mid-way through shrinking off the grid
     this.drawnPage = null; // the page number the grid currently shows
     this.lastSeen = new WeakMap(); // product -> where it last sat in the grid
     this.entries = []; // [{id, url, node, categories, tags, price, searchText}]
     this.groups = []; // filter group models
     this.priceRange = null; // {min, max, step, currency}
-    this.state = {search: '', groups: {}, price: null, page: 1};
+    this.state = {search: '', groups: {}, price: null, page: 1, sort: ''};
 
     this.elements = {};
     this.isDrawerOpen = false;
@@ -192,6 +209,7 @@ class WMStoreFilter {
     this.hasLoaded = true;
     this.buildGroups();
     this.buildPanel();
+    this.buildSort();
     this.root.classList.remove('is-loading');
     this.render();
 
@@ -343,8 +361,13 @@ class WMStoreFilter {
     this.entries = records
       .map(item => this.buildEntry(item, nodesByKey))
       .filter(Boolean);
+    /* The store's own order, which "Featured" puts back. */
+    this.entries.forEach((entry, index) => {
+      entry.order = index;
+    });
 
     await this.applyCategoryMembership();
+    this.resolveCategoryTree();
 
     const dropped = records.length - this.entries.length;
     if (dropped > 0) {
@@ -365,14 +388,13 @@ class WMStoreFilter {
 
   /* Squarespace's newer nested store categories are not in the collection
      JSON and are not printed on the items, but each one has its own page.
-     Ask every category which products it holds and label them from that. */
+     Ask every category which products it holds and label them from that.
+     A category page can name subcategories the store page didn't link to,
+     so keep going until no new ones turn up or maxCategories is reached. */
   async applyCategoryMembership() {
     /* Only worth the extra requests when the JSON carried no categories at
        all — ids resolved above are always preferred. */
     if (this.entries.some(entry => entry.categories.length)) return;
-
-    const links = this.discoverCategoryLinks().slice(0, this.settings.maxCategories);
-    if (!links.length) return;
 
     const byId = new Map();
     const byUrl = new Map();
@@ -381,17 +403,31 @@ class WMStoreFilter {
       if (entry.url) byUrl.set(entry.url, entry);
     });
 
-    const results = await Promise.all(
-      links.map(link => this.fetchCategoryMembers(link.url).then(members => ({link, members})))
-    );
+    const fetched = new Set();
+    let links = this.discoverCategoryLinks();
 
-    results.forEach(({link, members}) => {
-      members.forEach(member => {
-        const entry = byId.get(member.id) || byUrl.get(member.url);
-        if (!entry) return;
-        if (entry.categories.indexOf(link.label) === -1) entry.categories.push(link.label);
+    while (links.length && fetched.size < this.settings.maxCategories) {
+      const batch = links
+        .filter(link => !fetched.has(link.url))
+        .slice(0, this.settings.maxCategories - fetched.size);
+      if (!batch.length) break;
+      batch.forEach(link => fetched.add(link.url));
+
+      const results = await Promise.all(
+        batch.map(link => this.fetchCategoryMembers(link.url).then(members => ({link, members})))
+      );
+
+      results.forEach(({link, members}) => {
+        const value = this.registerCategory(link.label, link.url);
+        members.forEach(member => {
+          const entry = byId.get(member.id) || byUrl.get(member.url);
+          if (!entry) return;
+          if (entry.categories.indexOf(value) === -1) entry.categories.push(value);
+        });
       });
-    });
+
+      links = this.getTreeLinks().filter(link => !fetched.has(link.url));
+    }
   }
 
   discoverCategoryLinks() {
@@ -419,7 +455,22 @@ class WMStoreFilter {
       .querySelectorAll('.product-filter-dropdown-select option[value]')
       .forEach(option => add(option.value, option.textContent));
 
+    /* Register them in page order, so the filter lists categories the way
+       the store's own navigation does. */
+    found.forEach(link => this.registerCategory(link.label, link.url));
+    this.getTreeLinks().forEach(link => {
+      if (!found.has(link.url)) found.set(link.url, link);
+    });
+
     return Array.from(found.values());
+  }
+
+  /* Every category the tree knows about, as a page to ask for members. */
+  getTreeLinks() {
+    return Array.from(this.categoryTree.values()).map(node => ({
+      url: `${this.collection.url}/${node.path}`,
+      label: node.label
+    }));
   }
 
   async fetchCategoryMembers(url) {
@@ -431,6 +482,7 @@ class WMStoreFilter {
       seen.add(next);
       const json = await this.fetchJson(next);
       if (!json) break;
+      this.collectCategoryNames(json);
       (json.items || []).forEach(item => {
         members.push({id: item.id, url: this.normalizeUrl(item.fullUrl || '')});
       });
@@ -523,6 +575,7 @@ class WMStoreFilter {
       url,
       node,
       title: item.title || '',
+      added: item.addedOn || item.publishOn || item.createdOn || null,
       categories,
       tags,
       price,
@@ -566,24 +619,23 @@ class WMStoreFilter {
 
   /* Categories reach the JSON in several shapes depending on how old the
      store is: plain names, ids that point at a list elsewhere in the
-     response, or objects carrying both. Take whichever is there. */
+     response, or objects carrying both. Take whichever is there. Nested
+     categories come back as their path ("men/shirts") so two subcategories
+     sharing a name under different parents stay apart. */
   getItemCategories(item) {
     const found = [];
 
     const readValue = value => {
       if (typeof value === 'string') {
-        const name = this.categoryNames.get(value);
-        if (name) return name;
+        const info = this.categoryInfo.get(value);
+        if (info) return info.label ? this.registerCategory(info.label, info.path) : null;
         return WMStoreFilter.looksLikeId(value) ? null : value;
       }
       if (value && typeof value === 'object') {
-        return (
-          value.name ||
-          value.title ||
-          value.displayName ||
-          this.categoryNames.get(value.id) ||
-          null
-        );
+        if (this.isRootCategory(value)) return null;
+        const info = this.categoryInfo.get(value.id) || {};
+        const label = value.name || value.title || value.displayName || info.label;
+        return label ? this.registerCategory(label, this.getEntryPath(value) || info.path) : null;
       }
       return null;
     };
@@ -610,14 +662,39 @@ class WMStoreFilter {
   }
 
   /* Any list or lookup of categories in the response gives us the wording
-     that goes with an id. */
+     and the path that go with an id. Nested categories can sit several
+     levels down under whatever key holds a category's children, so
+     everything beneath a category key is searched. */
   collectCategoryNames(json) {
-    if (!this.categoryNames) this.categoryNames = new Map();
-
     const record = entry => {
-      if (!entry || typeof entry !== 'object') return;
+      if (!entry || typeof entry !== 'object' || !entry.id) return;
+      if (this.isRootCategory(entry)) return;
       const name = entry.name || entry.title || entry.displayName;
-      if (entry.id && name) this.categoryNames.set(entry.id, String(name).trim());
+      if (!name) return;
+      const label = String(name).trim();
+      const path = this.getEntryPath(entry);
+      this.categoryInfo.set(entry.id, {label, path});
+      /* Registering here keeps the store's own category order. */
+      if (this.categoryPath(path)) this.registerCategory(label, path);
+    };
+
+    const collect = (node, depth) => {
+      if (!node || typeof node !== 'object' || depth > 8) return;
+      if (Array.isArray(node)) {
+        node.forEach(child => collect(child, depth + 1));
+        return;
+      }
+      if (node.id) record(node);
+      Object.keys(node).forEach(key => {
+        const value = node[key];
+        if (value && typeof value === 'object') {
+          /* A lookup keyed by id, e.g. {"<id>": {name: "Tabs"}} */
+          if (!Array.isArray(value) && !value.id && WMStoreFilter.looksLikeId(key)) {
+            record(Object.assign({id: key}, value));
+          }
+          collect(value, depth + 1);
+        }
+      });
     };
 
     const walk = (node, depth) => {
@@ -625,25 +702,125 @@ class WMStoreFilter {
       Object.keys(node).forEach(key => {
         const value = node[key];
         if (!value || typeof value !== 'object') return;
-
-        if (/categor/i.test(key)) {
-          if (Array.isArray(value)) {
-            value.forEach(record);
-          } else {
-            /* A lookup keyed by id, e.g. {"<id>": {name: "Tabs"}} */
-            Object.keys(value).forEach(id => {
-              const entry = value[id];
-              if (!entry || typeof entry !== 'object') return;
-              record(Object.assign({id}, entry));
-            });
-          }
+        if (/categor/i.test(key) && key !== 'items') {
+          collect(value, 0);
+          return;
         }
-
-        walk(value, depth + 1);
+        if (key !== 'items') walk(value, depth + 1);
       });
     };
 
     walk(json, 0);
+  }
+
+  /* Squarespace lists the store itself as a category called "All" — it
+     holds every product, so it is not something to filter by. */
+  isRootCategory(entry) {
+    if (typeof entry.fullSlug === 'string' && /^\/*$/.test(entry.fullSlug)) return true;
+    if (entry.fullUrl && this.normalizeUrl(entry.fullUrl) === this.collection.url) return true;
+    return false;
+  }
+
+  /* Squarespace gives both: fullUrl "/shop/men/shirts" and fullSlug
+     "/men/shirts". The URL is preferred; the slug is relative to the store,
+     so it loses its leading slash rather than being read as a site path. */
+  getEntryPath(entry) {
+    if (entry.fullUrl) return entry.fullUrl;
+    if (typeof entry.fullSlug === 'string') return entry.fullSlug.replace(/^\/+/, '');
+    return '';
+  }
+
+  /* "/shop/men/shirts", "men/shirts" and "men/shirts/" all mean "men/shirts".
+     Old style "?category=" links carry no path and stay flat. */
+  categoryPath(value) {
+    if (!value || typeof value !== 'string' || value.indexOf('?') > -1) return '';
+    let path = value.trim();
+    if (/^https?:/i.test(path) || path.charAt(0) === '/') {
+      path = this.normalizeUrl(path);
+      const base = `${this.collection.url}/`;
+      if (path.indexOf(base) !== 0) return '';
+      path = path.slice(base.length);
+    }
+    return path
+      .replace(/^\/+|\/+$/g, '')
+      .toLowerCase();
+  }
+
+  /* A category is filed under its path when it has one, which is what lets
+     a subcategory find its parent. Without one it is filed by name. */
+  registerCategory(label, path) {
+    const name = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!name) return null;
+    const key = this.categoryPath(path);
+    if (!key) return name;
+    if (!this.categoryTree.has(key)) {
+      this.categoryTree.set(key, {value: key, label: name, path: key, order: this.categoryTree.size});
+    }
+    return key;
+  }
+
+  getCategoryNode(value) {
+    return value ? this.categoryTree.get(String(value).toLowerCase()) : null;
+  }
+
+  getCategoryLabel(value) {
+    const node = this.getCategoryNode(value);
+    return node ? node.label : value;
+  }
+
+  /* The nearest ancestor the store actually has — a missing middle level
+     just lifts the subcategory up one. */
+  getCategoryParent(value) {
+    const node = this.getCategoryNode(value);
+    if (!node) return null;
+    const parts = node.path.split('/');
+    while (parts.length > 1) {
+      parts.pop();
+      const parent = this.categoryTree.get(parts.join('/'));
+      if (parent) return parent.value;
+    }
+    return null;
+  }
+
+  getCategoryAncestors(value) {
+    const ancestors = [];
+    let parent = this.getCategoryParent(value);
+    while (parent && ancestors.indexOf(parent) === -1) {
+      ancestors.push(parent);
+      parent = this.getCategoryParent(parent);
+    }
+    return ancestors;
+  }
+
+  /* Once every source has had its say: names that came from item classes are
+     matched to their place in the tree, and each product joins the parents of
+     its subcategories, so ticking "Men" also finds "Men › Shirts". */
+  resolveCategoryTree() {
+    if (!this.categoryTree.size) return;
+
+    const byLabel = new Map();
+    this.categoryTree.forEach(node => {
+      const key = node.label.toLowerCase();
+      byLabel.set(key, byLabel.has(key) ? null : node.value);
+    });
+
+    this.entries.forEach(entry => {
+      const values = [];
+      entry.categories.forEach(value => {
+        const placed = this.getCategoryNode(value)
+          ? value.toLowerCase()
+          : byLabel.get(String(value).toLowerCase()) || value;
+        [placed, ...this.getCategoryAncestors(placed)].forEach(item => {
+          if (values.indexOf(item) === -1) values.push(item);
+        });
+      });
+      entry.categories = values;
+
+      const labels = values
+        .filter(value => this.getCategoryNode(value))
+        .map(value => this.getCategoryLabel(value).toLowerCase());
+      if (labels.length) entry.searchText = `${entry.searchText} ${labels.join(' ')}`;
+    });
   }
 
   /* One shared in-flight cache for the collection's JSON. The body is read
@@ -771,7 +948,9 @@ class WMStoreFilter {
       console.warn(
         `[${this.pluginName}] No ${type} filter was built. ${
           available.length
-            ? `The collection uses these ${type} values: ${available.join(', ')}.`
+            ? `The collection uses these ${type} values: ${available
+                .map(value => (type === 'tag' ? value : this.getCategoryLabel(value)))
+                .join(', ')}.`
             : `None of the ${this.entries.length} items in this collection have any ${type === 'tag' ? 'tags' : 'categories'} on them.`
         }`
       );
@@ -816,21 +995,42 @@ class WMStoreFilter {
     const available = this.getAvailableValues(type);
     if (!available.length) return null;
 
+    const showSubcategories =
+      definition.showSubcategories === undefined
+        ? this.settings.showSubcategories !== false
+        : !!definition.showSubcategories;
+
     let options = available;
+    let listed = null;
     const requested = definition.options;
     if (Array.isArray(requested) && requested.length) {
-      const lookup = new Map(available.map(value => [value.toLowerCase(), value]));
+      const lookup = this.getOptionLookup(type, available);
       options = [];
       requested.forEach(request => {
-        const match = lookup.get(String(request).toLowerCase());
+        const match = lookup.get(String(request).trim().toLowerCase());
         if (match) {
-          options.push(match);
+          if (options.indexOf(match) === -1) options.push(match);
         } else {
           console.warn(
             `[${this.pluginName}] No ${type} named "${request}" exists in this collection — skipping it.`
           );
         }
       });
+      listed = options.slice();
+      /* Naming a parent brings its subcategories along with it. */
+      if (type === 'category' && showSubcategories) {
+        available.forEach(value => {
+          if (options.indexOf(value) > -1) return;
+          if (this.getCategoryAncestors(value).some(parent => options.indexOf(parent) > -1)) {
+            options.push(value);
+          }
+        });
+      }
+    }
+    if (type === 'category' && !showSubcategories) {
+      options = options.filter(
+        value => !this.getCategoryAncestors(value).some(parent => options.indexOf(parent) > -1)
+      );
     }
     if (!options.length) return null;
 
@@ -841,7 +1041,10 @@ class WMStoreFilter {
       key: this.uniqueKey(definition.key || definition.label || type, usedKeys),
       label: definition.label || (type === 'tag' ? this.settings.tagsLabel : this.settings.categoriesLabel),
       type,
-      options: options.map(value => ({value, label: value, count: 0})),
+      options:
+        type === 'category'
+          ? this.buildCategoryOptions(options, listed)
+          : options.map(value => ({value, label: value, count: 0, depth: 0, parent: null})),
       multiSelect,
       style: this.optionStyle(definition),
       match: multiSelect ? (definition.match || this.settings.matchMode).toLowerCase() : 'any',
@@ -852,6 +1055,78 @@ class WMStoreFilter {
         ? !!this.settings.startCollapsed
         : !!definition.startCollapsed
     };
+  }
+
+  /* Options can be named by path ("men/shirts"), by name ("Shirts") or by
+     trail ("Men > Shirts"). A name shared by two subcategories goes to the
+     first — the trail tells them apart. */
+  getOptionLookup(type, available) {
+    const lookup = new Map();
+    const add = (key, value) => {
+      const text = String(key).trim().toLowerCase();
+      if (text && !lookup.has(text)) lookup.set(text, value);
+    };
+    available.forEach(value => {
+      add(value, value);
+      if (type !== 'category') return;
+      const trail = [...this.getCategoryAncestors(value).reverse(), value].map(item =>
+        this.getCategoryLabel(item)
+      );
+      add(trail.join(' > '), value);
+      add(trail.join(' / '), value);
+      add(this.getCategoryLabel(value), value);
+    });
+    return lookup;
+  }
+
+  /* Parents first, each followed by its own subcategories, in the store's own
+     order where it is known and alphabetically where it isn't — unless the
+     group listed its options, which then keep the order they were listed in.
+     Depth is counted within the group, so a subcategory offered without its
+     parent sits at the top level. */
+  buildCategoryOptions(values, listed = null) {
+    const included = new Set(values);
+    const parentOf = value => {
+      const parent = this.getCategoryAncestors(value).find(item => included.has(item));
+      return parent || null;
+    };
+    const rank = value => {
+      const index = listed ? listed.indexOf(value) : -1;
+      return index === -1 ? Infinity : index;
+    };
+    const compare = (a, b) => {
+      if (rank(a) !== rank(b)) return rank(a) < rank(b) ? -1 : 1;
+      const nodeA = this.getCategoryNode(a);
+      const nodeB = this.getCategoryNode(b);
+      if (nodeA && nodeB) return nodeA.order - nodeB.order;
+      if (nodeA || nodeB) return nodeA ? -1 : 1;
+      return String(a).localeCompare(String(b), undefined, {sensitivity: 'base'});
+    };
+
+    const children = new Map();
+    values.forEach(value => {
+      const parent = parentOf(value);
+      if (!children.has(parent)) children.set(parent, []);
+      children.get(parent).push(value);
+    });
+
+    const options = [];
+    const visit = (parent, depth) => {
+      (children.get(parent) || []).sort(compare).forEach(value => {
+        const kids = children.get(value) || [];
+        options.push({
+          value,
+          label: this.getCategoryLabel(value),
+          count: 0,
+          depth,
+          parent,
+          hasChildren: kids.length > 0
+        });
+        visit(value, depth + 1);
+      });
+    };
+    visit(null, 0);
+    return options;
   }
 
   /* A group takes its own style when it names one, the plugin-wide setting
@@ -923,7 +1198,9 @@ class WMStoreFilter {
       });
     });
     return Array.from(seen.values()).sort((a, b) =>
-      a.localeCompare(b, undefined, {sensitivity: 'base'})
+      String(this.getCategoryLabel(a)).localeCompare(String(this.getCategoryLabel(b)), undefined, {
+        sensitivity: 'base'
+      })
     );
   }
 
@@ -1194,6 +1471,108 @@ class WMStoreFilter {
     this.syncControls();
   }
 
+  /* Sorting is not a filter, so it lives above the products rather than in
+     the panel, and Clear All leaves it alone. Options with nothing to sort
+     on — prices on a store without any, say — are left out. */
+  buildSort() {
+    if (!this.settings.sort || !this.elements.toolbar) return;
+    const available = {
+      featured: true,
+      newest: this.entries.some(entry => entry.added),
+      'price-asc': this.entries.some(entry => entry.price),
+      'price-desc': this.entries.some(entry => entry.price),
+      'name-asc': true,
+      'name-desc': true
+    };
+    const text = this.settings.sortText || {};
+    const keys = (Array.isArray(this.settings.sortOptions) ? this.settings.sortOptions : [])
+      .map(key => String(key).toLowerCase())
+      .filter(key => {
+        if (key in available) return available[key];
+        console.warn(
+          `[${this.pluginName}] Unknown sort option "${key}". Use ${Object.keys(available).join(', ')}.`
+        );
+        return false;
+      });
+    if (!keys.length) return;
+    /* Until a sort is picked the store's own order stands, and the control
+       reads just "Sort". */
+    if (keys.indexOf(this.state.sort) === -1) this.state.sort = '';
+
+    const id = `wm-store-filter-sort-${Math.random().toString(36).slice(2, 8)}`;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'wm-store-filter-sort';
+    wrapper.innerHTML = `
+      <span class="wm-store-filter-sort-icon" aria-hidden="true">${WMStoreFilter.icons.sort}</span>
+      <label class="wm-store-filter-sort-label" for="${id}">${this.escape(this.settings.sortLabel)}</label>
+      <select id="${id}" class="wm-store-filter-sort-select">
+        <option value="" hidden${this.state.sort ? '' : ' selected'}></option>
+        ${keys
+          .map(
+            key =>
+              `<option value="${key}"${key === this.state.sort ? ' selected' : ''}>${this.escape(
+                text[key] || key
+              )}</option>`
+          )
+          .join('')}
+      </select>
+      <span class="wm-store-filter-sort-chevron" aria-hidden="true">${WMStoreFilter.icons.chevron}</span>
+      <span class="wm-store-filter-sort-measure" aria-hidden="true"></span>
+    `;
+    this.elements.toolbar.appendChild(wrapper);
+    this.elements.sort = wrapper.querySelector('select');
+    this.root.setAttribute('data-sort', 'true');
+
+    this.fitSort();
+    this.elements.sort.addEventListener('change', () => {
+      this.state.sort = this.elements.sort.value;
+      this.state.page = 1;
+      this.fitSort();
+      this.render();
+    });
+  }
+
+  /* A select is as wide as its longest option, which would leave the arrow
+     stranded after a short one. Size it to the option showing instead. */
+  fitSort() {
+    const select = this.elements.sort;
+    const measure = select && select.parentElement.querySelector('.wm-store-filter-sort-measure');
+    if (!measure) return;
+    const option = select.options[select.selectedIndex];
+    measure.textContent = option ? option.text : '';
+    const style = window.getComputedStyle(select);
+    const width =
+      measure.getBoundingClientRect().width +
+      parseFloat(style.paddingLeft) +
+      parseFloat(style.paddingRight);
+    if (width > 0) select.style.width = `${Math.ceil(width)}px`;
+  }
+
+  /* Ties, and products missing what is sorted on, keep the store's order. */
+  sortEntries(entries) {
+    const sort = this.state.sort;
+    if (!sort || sort === 'featured') return entries;
+
+    const byOrder = (a, b) => a.order - b.order;
+    const missingLast = (a, b, compare) => {
+      if (a == null && b == null) return 0;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      return compare(a, b);
+    };
+    const compare = {
+      newest: (a, b) => missingLast(a.added, b.added, (x, y) => y - x),
+      'price-asc': (a, b) =>
+        missingLast(a.price && a.price.min, b.price && b.price.min, (x, y) => x - y),
+      'price-desc': (a, b) =>
+        missingLast(a.price && a.price.max, b.price && b.price.max, (x, y) => y - x),
+      'name-asc': (a, b) => a.title.localeCompare(b.title, undefined, {sensitivity: 'base', numeric: true}),
+      'name-desc': (a, b) => b.title.localeCompare(a.title, undefined, {sensitivity: 'base', numeric: true})
+    }[sort];
+    if (!compare) return entries;
+    return entries.slice().sort((a, b) => compare(a, b) || byOrder(a, b));
+  }
+
   buildSearch() {
     const wrapper = document.createElement('div');
     wrapper.className = 'wm-store-filter-search';
@@ -1254,9 +1633,50 @@ class WMStoreFilter {
       ? group.options
       : [{value: '', label: `All ${group.label}`, count: null}, ...group.options];
 
+    if (!this.expanded.has(group.key)) {
+      this.expanded.set(
+        group.key,
+        new Set(
+          this.settings.subcategoriesStartOpen
+            ? group.options.filter(option => option.hasChildren).map(option => option.value)
+            : []
+        )
+      );
+    }
+
+    /* Pills can't show what belongs to what, so with the buttons style the
+       top level categories are the pills, and choosing one opens a section
+       below headed with its name holding its subcategory pills. Choosing one
+       of those that has subcategories of its own opens a smaller section in
+       turn. */
+    const usesSections = group.style === 'buttons' && group.options.some(option => option.hasChildren);
+    const sections = new Map();
+    if (usesSections) {
+      group.options
+        .filter(option => option.hasChildren)
+        .forEach(option => {
+          const section = document.createElement('li');
+          section.className = 'wm-store-filter-option-section';
+          section.dataset.parent = option.value;
+          section.dataset.depth = String(option.depth || 0);
+          section.hidden = true;
+          section.innerHTML = `
+            <p class="wm-store-filter-option-heading">${this.escape(option.label)}</p>
+            <ul class="wm-store-filter-options"></ul>
+          `;
+          sections.set(option.value, section);
+        });
+    }
+
     options.forEach(option => {
       const item = document.createElement('li');
       item.className = 'wm-store-filter-option-item';
+      const depth = option.depth || 0;
+      item.dataset.depth = String(depth);
+      if (depth) item.style.setProperty('--wm-store-filter-option-depth', depth);
+      if (option.parent) item.dataset.parent = option.parent;
+      if (option.hasChildren) item.classList.add('has-children');
+
       item.innerHTML = `
         <label class="wm-store-filter-option">
           <input type="${inputType}" name="${name}" value="${this.escape(option.value)}" class="wm-store-filter-input">
@@ -1266,11 +1686,94 @@ class WMStoreFilter {
             this.settings.showOptionCounts && option.value ? '' : ' hidden'
           }></span>
         </label>
+        ${
+          option.hasChildren && !usesSections
+            ? `<button type="button" class="wm-store-filter-option-expand" aria-expanded="false" aria-label="Show ${this.escape(
+                option.label
+              )} subcategories">${WMStoreFilter.icons.chevron}</button>`
+            : ''
+        }
       `;
-      list.appendChild(item);
+      const section = usesSections && option.parent ? sections.get(option.parent) : null;
+      if (section) section.querySelector('ul').appendChild(item);
+      else list.appendChild(item);
     });
 
+    sections.forEach(section => list.appendChild(section));
     return list;
+  }
+
+  /* A subcategory shows while every parent above it is open. */
+  updateSubcategoryVisibility(group, element) {
+    if (element.querySelector('.wm-store-filter-option-section')) {
+      this.updateSections(group, element);
+      return;
+    }
+    const open = this.expanded.get(group.key);
+    if (!open) return;
+    const byValue = new Map(group.options.map(option => [option.value, option]));
+
+    element.querySelectorAll('.wm-store-filter-option-item').forEach(item => {
+      const input = item.querySelector('.wm-store-filter-input');
+      const option = input ? byValue.get(input.value) : null;
+      if (!option) return;
+
+      let parent = option.parent;
+      let visible = true;
+      while (parent && visible) {
+        visible = open.has(parent);
+        parent = (byValue.get(parent) || {}).parent;
+      }
+      item.hidden = !visible;
+
+      const toggle = item.querySelector('.wm-store-filter-option-expand');
+      if (toggle) {
+        const isOpen = open.has(option.value);
+        toggle.setAttribute('aria-expanded', String(isOpen));
+        item.classList.toggle('is-open', isOpen);
+      }
+    });
+  }
+
+  /* A category's section is open while it, or anything under it, is
+     chosen — so narrowing down to a subcategory never hides the section it
+     sits in. */
+  updateSections(group, element) {
+    const selected = (this.state.groups[group.key] || []).map(value => value.toLowerCase());
+    element.querySelectorAll('.wm-store-filter-option-section').forEach(section => {
+      const parent = section.dataset.parent;
+      section.hidden = !selected.some(
+        value => value === parent || this.getCategoryAncestors(value).includes(parent)
+      );
+    });
+  }
+
+  /* Opening a parent is remembered per group; a selection deeper down keeps
+     its parents open so it can never be ticked out of sight. */
+  openToSelection(group) {
+    const open = this.expanded.get(group.key);
+    if (!open) return;
+    const selected = this.state.groups[group.key] || [];
+    selected.forEach(value => {
+      const option = group.options.find(item => item.value.toLowerCase() === value.toLowerCase());
+      let parent = option ? option.parent : null;
+      while (parent) {
+        open.add(parent);
+        const next = group.options.find(item => item.value === parent);
+        parent = next ? next.parent : null;
+      }
+    });
+  }
+
+  toggleSubcategories(button) {
+    const element = button.closest('.wm-store-filter-group');
+    const group = element && this.groups.find(item => item.key === element.dataset.key);
+    const input = button.closest('.wm-store-filter-option-item').querySelector('.wm-store-filter-input');
+    if (!group || !input) return;
+    const open = this.expanded.get(group.key);
+    if (open.has(input.value)) open.delete(input.value);
+    else open.add(input.value);
+    this.updateSubcategoryVisibility(group, element);
   }
 
   buildPriceControl(group) {
@@ -1358,6 +1861,8 @@ class WMStoreFilter {
           ? selected.includes(input.value.toLowerCase())
           : selected.length === 0;
       });
+      this.openToSelection(group);
+      this.updateSubcategoryVisibility(group, element);
       this.updateGroupSummary(group, element);
     });
   }
@@ -1376,7 +1881,11 @@ class WMStoreFilter {
     }
 
     const selected = this.state.groups[group.key] || [];
-    summary.textContent = selected.length === 1 ? selected[0] : selected.length ? `${selected.length}` : '';
+    const option =
+      selected.length === 1 &&
+      group.options.find(item => item.value.toLowerCase() === selected[0].toLowerCase());
+    summary.textContent =
+      selected.length === 1 ? (option ? option.label : selected[0]) : selected.length ? `${selected.length}` : '';
     element.classList.toggle('has-selection', selected.length > 0);
   }
 
@@ -1430,10 +1939,25 @@ class WMStoreFilter {
     const values = (group.type === 'tag' ? entry.tags : entry.categories).map(value =>
       value.toLowerCase()
     );
-    const wanted = selected.map(value => value.toLowerCase());
+    const wanted = this.narrowSelection(group, selected).map(value => value.toLowerCase());
     return group.match === 'all'
       ? wanted.every(value => values.includes(value))
       : wanted.some(value => values.includes(value));
+  }
+
+  /* Picking a subcategory under a picked parent narrows the parent rather
+     than adding to it — Men then Shoes means men's shoes, not all of Men. */
+  narrowSelection(group, selected) {
+    if (group.type !== 'category' || selected.length < 2) return selected;
+    const picked = selected.map(value => value.toLowerCase());
+    return selected.filter(
+      value =>
+        !picked.some(
+          other =>
+            other !== value.toLowerCase() &&
+            this.getCategoryAncestors(other).indexOf(value.toLowerCase()) > -1
+        )
+    );
   }
 
   getMatches(exceptKey = null) {
@@ -1464,7 +1988,7 @@ class WMStoreFilter {
 
   render() {
     if (!this.root) return;
-    const matches = this.getMatches();
+    const matches = this.sortEntries(this.getMatches());
     const perPage = this.getPerPage();
     const totalPages = this.isPaginated() ? Math.max(1, Math.ceil(matches.length / perPage)) : 1;
 
@@ -1861,6 +2385,12 @@ class WMStoreFilter {
     };
 
     this.onPanelClick = event => {
+      const expand = event.target.closest('.wm-store-filter-option-expand');
+      if (expand) {
+        this.toggleSubcategories(expand);
+        return;
+      }
+
       const toggle = event.target.closest('.wm-store-filter-group-toggle');
       if (toggle) this.toggleGroup(toggle.closest('.wm-store-filter-group'));
     };
@@ -1951,6 +2481,16 @@ class WMStoreFilter {
     } else {
       this.state.groups[group.key] = input.value ? [input.value] : [];
     }
+
+    /* Choosing a parent opens it, so its subcategories are there to narrow
+       down to next. */
+    const open = this.expanded.get(group.key);
+    const option = group.options.find(item => item.value === input.value);
+    if (open && option && option.hasChildren && input.checked) {
+      open.add(option.value);
+    }
+    this.openToSelection(group);
+    this.updateSubcategoryVisibility(group, element);
 
     this.state.page = 1;
     this.updateGroupSummary(group, element);

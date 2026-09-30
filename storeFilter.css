@@ -316,7 +316,7 @@
 }
 
 /* Sidebar layout: the count moves to the foot of the filters, which leaves
-   the toolbar above the items with nothing in it. */
+   the toolbar above the items with nothing in it — unless it holds the sort. */
 .wm-store-filter[data-position='side'][data-variant='panel']:not(.is-mobile)
   .wm-store-filter-panel-footer {
   flex-direction: column;
@@ -324,7 +324,7 @@
   gap: 0.6em;
 }
 
-.wm-store-filter[data-position='side'][data-variant='panel']:not(.is-mobile)
+.wm-store-filter[data-position='side'][data-variant='panel']:not(.is-mobile):not([data-sort='true'])
   .wm-store-filter-toolbar {
   display: none;
 }
@@ -537,6 +537,67 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Subcategories sit under their parent, stepped in one level at a time. The
+   parent carries an arrow to open and close them. */
+.wm-store-filter-option-item[hidden] {
+  display: none !important;
+}
+
+.wm-store-filter-option-item[data-depth] {
+  padding-left: calc(
+    var(--wm-store-filter-option-depth, 0) * var(--wm-store-filter-subcategory-indent, 1.65em)
+  );
+}
+
+.wm-store-filter-option-item.has-children {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+}
+
+.wm-store-filter-option-item.has-children .wm-store-filter-option {
+  flex: 1;
+  min-width: 0;
+}
+
+.wm-store-filter-option-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.5em;
+  height: 1.5em;
+  margin: 0;
+  padding: 0.25em;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity var(--wm-store-filter-transition, 0.25s);
+}
+
+.wm-store-filter-option-expand:hover,
+.wm-store-filter-option-expand:focus-visible {
+  opacity: 1;
+}
+
+.wm-store-filter-option-expand:focus-visible {
+  outline: 2px solid var(--wm-store-filter-resolved-accent);
+  outline-offset: 1px;
+}
+
+.wm-store-filter-option-expand svg {
+  width: 100%;
+  height: 100%;
+  transition: transform var(--wm-store-filter-transition, 0.25s);
+}
+
+.wm-store-filter-option-item.is-open > .wm-store-filter-option-expand svg {
+  transform: rotate(180deg);
+}
+
 /* Buttons: the same inputs and the same state, drawn as pills. The tick box
    steps aside and the pill itself carries the selection. */
 .wm-store-filter-group[data-style='buttons'] .wm-store-filter-options {
@@ -583,6 +644,46 @@
 
 .wm-store-filter-group[data-style='buttons'] .wm-store-filter-option-label {
   flex: none;
+}
+
+.wm-store-filter-group[data-style='buttons'] .wm-store-filter-option-item[data-depth] {
+  padding-left: 0;
+}
+
+.wm-store-filter-group[data-style='buttons'] .wm-store-filter-option-expand {
+  display: none;
+}
+
+/* With subcategories, each category is a heading over its subcategory
+   pills. A deeper level sits inside its category under a smaller heading. */
+.wm-store-filter-option-section {
+  flex-basis: 100%;
+  margin: 0.35em 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wm-store-filter-option-section:not([data-depth='0']) {
+  margin-top: 0;
+  padding-left: var(--wm-store-filter-subcategory-indent, 1em);
+  border-left: 1px solid var(--wm-store-filter-resolved-border);
+}
+
+.wm-store-filter-option-heading {
+  margin: 0 0 0.5em;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.wm-store-filter-option-section:not([data-depth='0']) .wm-store-filter-option-heading {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.wm-store-filter-group[data-style='buttons'] .wm-store-filter-option-section .wm-store-filter-options {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.5em;
 }
 
 /* ================================
@@ -699,6 +800,78 @@
 .wm-store-filter-count {
   margin: 0;
   opacity: 0.7;
+  white-space: nowrap;
+}
+
+/* Sort: a native select with no button chrome — the icon, the word Sort
+   and the chosen order read as one line of text, like the Filter toggle.
+   It sits at the far end of the toolbar. */
+.wm-store-filter-sort {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  order: 2;
+  margin-left: auto;
+  border-radius: 2px;
+}
+
+.wm-store-filter-sort:focus-within {
+  outline: 2px solid var(--wm-store-filter-resolved-accent);
+  outline-offset: 4px;
+}
+
+.wm-store-filter-sort-icon {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+  pointer-events: none;
+}
+
+.wm-store-filter-sort-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.wm-store-filter-sort-label {
+  padding-left: 0.4em;
+  opacity: 0.6;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.wm-store-filter-sort-select {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0.35em 1.3em 0.35em 0.3em;
+  border: 0;
+  border-radius: inherit;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.wm-store-filter-sort-measure {
+  position: absolute;
+  visibility: hidden;
+  white-space: pre;
+  pointer-events: none;
+}
+
+.wm-store-filter-sort-chevron {
+  position: absolute;
+  right: 0;
+  display: inline-flex;
+  width: 0.9em;
+  height: 0.9em;
+  pointer-events: none;
+}
+
+.wm-store-filter-sort-chevron svg {
+  width: 100%;
+  height: 100%;
 }
 
 /* On mobile this is the icon and the word Filter — no button chrome. */
@@ -968,10 +1141,20 @@
   display: inline-flex;
 }
 
-/* Filter on one end, the count on the other. */
+/* Filter on one end, the count on the other — with a sort, the count
+   sits beside it. */
 .wm-store-filter.is-mobile .wm-store-filter-toolbar {
   justify-content: space-between;
 }
+
+.wm-store-filter.is-mobile[data-sort='true'] .wm-store-filter-count {
+  margin-left: auto;
+}
+
+.wm-store-filter.is-mobile .wm-store-filter-sort {
+  margin-left: 0;
+}
+
 
 .wm-store-filter.is-mobile .wm-store-filter-panel-header {
   display: flex;
