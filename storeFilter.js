@@ -645,6 +645,9 @@ class WMStoreFilter {
       if (!node || typeof node !== 'object' || depth > 2) return;
       Object.keys(node).forEach(key => {
         const value = node[key];
+        /* relatedCategoryIds picks the "You might also like" products — it
+           says nothing about which categories this product is in. */
+        if (/related/i.test(key)) return;
         if (/categor/i.test(key) && Array.isArray(value)) {
           value.forEach(entry => {
             const name = readValue(entry);
@@ -1059,24 +1062,26 @@ class WMStoreFilter {
   }
 
   /* Options can be named by path ("men/shirts"), by name ("Shirts") or by
-     trail ("Men > Shirts"). A name shared by two subcategories goes to the
-     first — the trail tells them apart. */
+     trail ("Men > Shirts"). Paths are claimed first, then trails, then bare
+     names, so "protection" always means the top level Protection and never
+     "Elite > Protection" just because that one came first. A name shared by
+     two categories goes to the first — the path or trail tells them apart. */
   getOptionLookup(type, available) {
     const lookup = new Map();
     const add = (key, value) => {
       const text = String(key).trim().toLowerCase();
       if (text && !lookup.has(text)) lookup.set(text, value);
     };
+    available.forEach(value => add(value, value));
+    if (type !== 'category') return lookup;
     available.forEach(value => {
-      add(value, value);
-      if (type !== 'category') return;
       const trail = [...this.getCategoryAncestors(value).reverse(), value].map(item =>
         this.getCategoryLabel(item)
       );
       add(trail.join(' > '), value);
       add(trail.join(' / '), value);
-      add(this.getCategoryLabel(value), value);
     });
+    available.forEach(value => add(this.getCategoryLabel(value), value));
     return lookup;
   }
 
