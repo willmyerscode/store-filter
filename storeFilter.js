@@ -52,6 +52,7 @@ class WMStoreFilter {
       nextText: 'Next',
       scrollToTop: true
     },
+    scrollToTopOnFilter: true, // jump back up when a filter leaves every product above the screen
     sort: true, // a sort menu above the products
     sortLabel: 'Sort',
     sortOptions: ['newest', 'price-asc', 'price-desc', 'name-asc', 'name-desc'], // 'featured' = store order
@@ -1834,6 +1835,7 @@ class WMStoreFilter {
     if (this.elements.search) this.elements.search.value = '';
     this.syncControls();
     this.render();
+    this.scrollUpAfterFilter();
   }
 
   /* Push every value in `state` back onto the inputs — used after a clear,
@@ -2495,6 +2497,7 @@ class WMStoreFilter {
     this.state.page = 1;
     this.updateGroupSummary(group, element);
     this.render();
+    this.scrollUpAfterFilter();
   }
 
   handlePriceInput(input) {
@@ -2592,6 +2595,10 @@ class WMStoreFilter {
     this.elements.toggle.setAttribute('aria-expanded', 'false');
     document.documentElement.classList.remove('wm-store-filter-locked');
     this.syncVariant();
+    if (this.pendingScrollUp) {
+      this.pendingScrollUp = false;
+      this.scrollUpAfterFilter();
+    }
     if (this.usesDrawer) this.elements.toggle.focus();
     WMStoreFilter.emitEvent(':drawerClose', {instance: this});
   }
@@ -2714,17 +2721,45 @@ class WMStoreFilter {
     return window.matchMedia(`(max-width: ${this.settings.mobileBreakpoint}px)`).matches;
   }
 
-  scrollToTop() {
-    if (!this.settings.pagination.scrollToTop) return;
+  /* A visitor scrolled well down the products who picks a category can be
+     left looking at the footer, with the shorter list entirely above them.
+     Only then does the page jump back up — if any product is still on
+     screen they stay where they are. Runs after the render, when the grid
+     is already its new size (the shuffle moves products with transforms,
+     which leave the grid's own box alone). With the drawer open the page
+     underneath is locked, so the check waits until it closes. */
+  scrollUpAfterFilter() {
+    if (!this.settings.scrollToTopOnFilter) return;
+    if (this.isDrawerOpen) {
+      this.pendingScrollUp = true;
+      return;
+    }
+    if (!this.productsAboveScreen()) return;
+    this.scrollToTop({onlyUp: true, force: true});
+  }
+
+  /* True when the products — or the "no results" message, when nothing
+     matched — end above the header, so nothing of them is showing. A sliver
+     under the header counts as nothing. */
+  productsAboveScreen() {
+    const target = this.elements.empty.hidden ? this.list.container : this.elements.empty;
+    if (!target) return false;
+    const header = document.querySelector('#header');
+    const offset = header ? header.getBoundingClientRect().bottom : 0;
+    return target.getBoundingClientRect().bottom < Math.max(offset, 0) + 40;
+  }
+
+  scrollToTop({onlyUp = false, force = false} = {}) {
+    if (!force && !this.settings.pagination.scrollToTop) return;
     const header = document.querySelector('#header');
     const offset = header ? header.offsetHeight : 0;
-    const top = this.root.getBoundingClientRect().top + window.scrollY - offset - 20;
-    const already = Math.abs(window.scrollY - Math.max(top, 0)) < 2;
-    if (already) return;
+    const top = Math.max(this.root.getBoundingClientRect().top + window.scrollY - offset - 20, 0);
+    if (Math.abs(window.scrollY - top) < 2) return;
+    if (onlyUp && window.scrollY < top) return;
 
     /* Jumping rather than gliding: the products are about to animate, and two
        motions at once read as one broken one. */
-    window.scrollTo({top: Math.max(top, 0), behavior: 'auto'});
+    window.scrollTo({top, behavior: 'auto'});
   }
 
   /* ================================

@@ -9,38 +9,31 @@ Store Filter adds a search box, category and tag filters, a price range slider a
 
 <p class="sqsrte-large" id="installation" style="color:white;font-weight: bold">Installation</p>
 
-Add these two code snippets to the store page you want to filter. Open **Pages → your Shop page → ⚙ Settings → Advanced → Page Header Code Injection** and paste both of them into that one box, styles first.
+Add these two code snippets to the Website » Website Tools » Code Injection area.
 
-Paste this, the Styles, first:
+Paste this, the Styles, into the Site Header Code Injection area:
 
 ```html
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/willmyerscode/store-filter@1/storeFilter.min.css">
 ```
 
-And paste this, your Javascript, underneath it:
+And paste this, your Javascript, into the Site Footer Code Injection area.
 
 ```html
 <script src="https://cdn.jsdelivr.net/gh/willmyerscode/store-filter@1/storeFilter.min.js"></script>
 ```
 
-That is everything — save the page and the filters appear next to your products. If you have more than one store and want the filters on all of them, put the styles in the **Site Header Code Injection** and the script in the **Site Footer Code Injection** instead; the plugin only starts itself up on store pages and quietly does nothing everywhere else.
+Save, and the filters appear next to your products on every store you have.
 
 <br>
 <br>
 
 <p class="sqsrte-large" id="usage" style="color:white;font-weight: bold">Usage</p>
 
-1. Install the two snippets above on a **Shop** page
-2. Set your section's layout, columns and spacing as normal in **Edit → Section Settings** — the filtered items keep using them
+1. Install the two snippets above in Code Injection
+2. Open the **Shop** page you want to filter and set your section's layout, columns and spacing as normal in **Edit → Section Settings** — the filtered items keep using them
 3. Save and preview the page
 
-A few things worth knowing:
-
-- **Filters are built from your content.** Every category and every tag used by the store becomes an option automatically, with a count beside it. Take the categories or tags off a product and the option disappears on its own.
-- **The price slider appears automatically** when the store has products at more than one price, custom `filters` included. List a `"price"` group yourself to choose where it sits, or set `priceFilter: false` to drop it.
-- **Options are tick boxes by default**, and can be drawn as buttons instead — set `optionStyle: "buttons"` for every group, or `style: "buttons"` on one custom group.
-- **Squarespace's own filter interface is switched off** while the plugin is running — its filters, category nav, result count and pagination — so visitors never see two sets of controls. It comes back untouched in the editor.
-- **Pagination is handled by the plugin**, across the whole filtered set. Squarespace's own page numbers are hidden.
 - **Nothing runs while you are editing.** The Squarespace editor re-renders the collection as you work, so the plugin stays out of the way in edit mode. Preview or view the live page to see it.
 
 <br>
@@ -75,82 +68,49 @@ The filters are namespaced under `.wm-store-filter`. By default the colors inher
 ```css
 .wm-store-filter {
   --wm-store-filter-sidebar-width: 250px;
-  --wm-store-filter-edge-offset: 0px; /* measured in JS — see below */
   --wm-store-filter-gap: 4vw;
   --wm-store-filter-group-gap: 1.75em;
   --wm-store-filter-sticky-gap: 0px;
-  --wm-store-filter-sticky-offset: calc(
-    var(--wm-store-filter-header-offset, 0px) +
-      var(--wm-store-filter-sticky-gap, 0px)
-  );
-  --wm-store-filter-drawer-width: min(86vw, 340px);
-  --wm-store-filter-z: 99999;
+  --wm-store-filter-sticky-offset: 0px;
+  --wm-store-filter-drawer-width: 86vw;
 }
 ```
 
-The side panel lines itself up with your logo: a section's content is usually inset further than the header is, so the plugin measures that gap and publishes it as `--wm-store-filter-edge-offset`. Set the variable yourself — `0px` leaves the panel on the section's own edge.
-
 </details>
 
-<details class="wm-doc-toggle">
-<summary>Top layout alignment</summary>
-
-Use the `topAlignment` setting rather than CSS — `"spread"` (the default), `"left"`, `"right"` or `"center"`. The plugin puts the value on the wrapper as `data-align`, so you can still target a particular arrangement in **Design → Custom CSS** if you need to:
-
-```css
-.wm-store-filter[data-variant='dropdown'][data-align='spread'] {
-  /* your own tweaks */
-}
-```
-
-The search box is `flex: 0 1 260px`; override `flex` on `.wm-store-filter-search` to make it wider or narrower.
-
-</details>
 
 <details class="wm-doc-toggle">
-<summary>Shape &amp; type</summary>
+<summary>Text Styles</summary>
 
 ```css
 .wm-store-filter {
   --wm-store-filter-font-size: 0.85rem;
   --wm-store-filter-title-font-size: 0.9rem;
-  --wm-store-filter-radius: 6px;
-  --wm-store-filter-control-radius: 4px;
-  --wm-store-filter-pill-radius: 100px;
-  --wm-store-filter-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  --wm-store-filter-shuffle-duration: 0.45s;
-  --wm-store-filter-shuffle-ease: cubic-bezier(0.25, 0.46, 0.3, 1);
-  --wm-store-filter-shuffle-stagger: 0ms;
-  --wm-store-filter-shuffle-scale: 1;
-  --wm-store-filter-shuffle-exit-duration: 0.22s;
-  --wm-store-filter-shuffle-exit-scale: 0.94;
-  --wm-store-filter-shuffle-shift: 28px;
 }
 ```
-
-When the filters change, products the filter drops fade out where they stood, and products already on screen slide to their new places. A product the filter had hidden comes back from wherever it last sat in the grid, travelling the same way, so a product that was down in row four flies up from row four rather than appearing out of nowhere. Only a product the page has never shown — one from a later page of results — rises into place from below instead. It all happens at once, at full size. `--wm-store-filter-shuffle-duration` covers all three, `--wm-store-filter-shuffle-scale` makes products grow and shrink as well when you set it below `1` — `0.001` gives the hard pop an Isotope grid does — and `--wm-store-filter-shuffle-stagger` adds a gap between one arrival and the next if you want them to land in sequence. A product on its way out briefly stands in a slot another product is moving into, so it leaves faster than the others move and passes underneath them — `--wm-store-filter-shuffle-exit-duration` and `--wm-store-filter-shuffle-exit-scale` control that departure. `--wm-store-filter-shuffle-shift` is how far a product the page has never shown rises as it arrives; set it to `0px` to have it fade in where it lands. Anyone browsing with reduced motion turned on gets none of it, and the `shuffle` setting turns it off for everybody.
-
-`--wm-store-filter-font-size` sets the size of every word in the filters — option labels, counts, the search field, the result count and the buttons. `--wm-store-filter-title-font-size` covers the group headings and the drawer title on its own. To match your site's body copy, set the first one to `1rem` or whatever your paragraph size is.
 
 </details>
 
 <details class="wm-doc-toggle">
-<summary>Mobile overrides</summary>
+<summary>Border Radius</summary>
 
 ```css
 .wm-store-filter {
-  --wm-store-filter-gap-mobile: 20px;
+  --wm-store-filter-radius: 6px;
+  --wm-store-filter-control-radius: 4px;
+  --wm-store-filter-pill-radius: 100px;
 }
 ```
 
 </details>
+
 
 <br>
 <br>
 
 <p class="sqsrte-large" id="settings" style="color:white;font-weight: bold">Settings</p>
 
-All settings are optional. Place this snippet in the same **Page Header Code Injection** box, *before* the plugin script:
+All settings are optional. Place this snippet in the store page's own **Pages → your Shop page → ⚙ Settings → Advanced → Page Header Code Injection** box, so the settings apply to that store only. Every setting on this page — including the custom filter groups further down — goes inside this one `window.wmStoreFilterSettings` object, so add the ones you want to change to the same script rather than pasting a second one:
 
 ```html
 <script>
@@ -246,6 +206,18 @@ All settings are optional. Place this snippet in the same **Page Header Code Inj
 <td>Heading above the automatic tag options.</td>
 </tr>
 <tr>
+<td><code>showSubcategories</code></td>
+<td><code>boolean</code></td>
+<td><code>true</code></td>
+<td>Lists subcategories under their parent category, with an arrow to open and close them. A product in a subcategory also counts toward its parent, so choosing "Men" includes "Men › Shirts". Choosing a subcategory under a chosen parent narrows the results to that subcategory. With the <code>"buttons"</code> style, only top level categories show as pills to begin with; choosing one opens its subcategories underneath, headed with the category's name. <code>false</code> lists only top level categories. One group can override this with its own <code>showSubcategories</code>.</td>
+</tr>
+<tr>
+<td><code>subcategoriesStartOpen</code></td>
+<td><code>boolean</code></td>
+<td><code>false</code></td>
+<td>List style only. <code>true</code> shows every subcategory from the start instead of waiting for its parent to be opened.</td>
+</tr>
+<tr>
 <td><code>multiSelect</code></td>
 <td><code>boolean</code></td>
 <td><code>true</code></td>
@@ -336,6 +308,36 @@ All settings are optional. Place this snippet in the same **Page Header Code Inj
 <td>Scrolls back up to the first item when a page number is clicked.</td>
 </tr>
 <tr>
+<td><code>scrollToTopOnFilter</code></td>
+<td><code>boolean</code></td>
+<td><code>true</code></td>
+<td>Scrolls back up to the products when a visitor picks a category or tag, or clears their filters, and the new results all sit above the screen — so they are never left looking at an empty stretch of page. If any product is still showing, the page stays put. In the mobile drawer the check happens when the drawer closes.</td>
+</tr>
+<tr>
+<td><code>sort</code></td>
+<td><code>boolean</code></td>
+<td><code>true</code></td>
+<td>Shows a Sort menu above the products. Sorting is kept when a visitor clears their filters.</td>
+</tr>
+<tr>
+<td><code>sortLabel</code></td>
+<td><code>string</code></td>
+<td><code>"Sort"</code></td>
+<td>The word shown after the sort icon, in front of the chosen sort.</td>
+</tr>
+<tr>
+<td><code>sortOptions</code></td>
+<td><code>array</code></td>
+<td>all but <code>"featured"</code></td>
+<td>Which sorts to offer, in order: <code>"newest"</code>, <code>"price-asc"</code>, <code>"price-desc"</code>, <code>"name-asc"</code>, <code>"name-desc"</code>, and <code>"featured"</code> (the store's own order) if you want visitors to be able to return to it. Products keep the store's order until a visitor picks a sort. Price sorts are left out of stores without prices.</td>
+</tr>
+<tr>
+<td><code>sortText</code></td>
+<td><code>object</code></td>
+<td>see description</td>
+<td>The wording for each sort, e.g. <code>{ "price-asc": "Cheapest first" }</code>. Anything left out keeps its default: Newest, Price, low to high, Price, high to low, Name, A–Z, Name, Z–A, and Featured.</td>
+</tr>
+<tr>
 <td><code>showResultCount</code></td>
 <td><code>boolean</code></td>
 <td><code>true</code></td>
@@ -421,11 +423,13 @@ All settings are optional. Place this snippet in the same **Page Header Code Inj
 
 **Custom filter groups**
 
-Set `filters` to an array to build the groups yourself. Each group says whether it filters on categories or tags and which values belong in it, and you can have as many groups as you like:
+Set `filters` to an array to build the groups yourself. Each group says whether it filters on categories or tags and which values belong in it, and you can have as many groups as you like. `filters` is one of the settings above, so it belongs in the same object alongside any others you have set:
 
 ```html
 <script>
   window.wmStoreFilterSettings = {
+    position: "side",
+    optionStyle: "buttons",
     filters: [
       {
         label: "Type",
@@ -440,11 +444,10 @@ Set `filters` to an array to build the groups yourself. Each group says whether 
         options: ["Spring", "Summer"],
         multiSelect: false,
       },
-      {
-        label: "Price",
-        type: "price",
-      },
     ],
+    pagination: {
+      itemsPerPage: 12,
+    },
   };
 </script>
 ```
@@ -478,7 +481,7 @@ Set `filters` to an array to build the groups yourself. Each group says whether 
 <td><code>options</code></td>
 <td><code>array</code></td>
 <td>all of them</td>
-<td>Which categories or tags appear in this group, in the order you list them. Leave it out to include every one used in the collection. Names that no item uses are skipped.</td>
+<td>Which categories or tags appear in this group, in the order you list them. Leave it out to include every one used in the collection. Names that no item uses are skipped. A subcategory can be named on its own (<code>"Shirts"</code>) or with its parent when two share a name (<code>"Women > Shirts"</code>). Listing a parent brings its subcategories with it.</td>
 </tr>
 <tr>
 <td><code>multiSelect</code></td>
@@ -493,17 +496,6 @@ Set `filters` to an array to build the groups yourself. Each group says whether 
 <td>Used when multiple options are ticked. <code>"any"</code> matches items with at least one of them, <code>"all"</code> matches only items with every one of them.</td>
 </tr>
 <tr>
-<td><code>style</code></td>
-<td><code>string</code></td>
-<td>the <code>optionStyle</code> setting</td>
-<td><code>"list"</code> for tick boxes or <code>"buttons"</code> for pills, for this group only.</td>
-</tr>
-<tr>
-<td><code>startCollapsed</code></td>
-<td><code>boolean</code></td>
-<td><code>false</code></td>
-<td>Starts this group collapsed.</td>
-</tr>
 </tbody>
 </table>
 </div>
@@ -516,7 +508,7 @@ Set `filters` to an array to build the groups yourself. Each group says whether 
 <details class="wm-doc-toggle">
 <summary>Does this work on a Blog page?</summary>
 
-No — Store Filter is for stores only. On any other page it starts up, finds no product grid, and stops without touching anything. It works with both the current and the classic Squarespace product list layouts; if your shop uses something unusual and the filters do not appear, set `listSelector` and `itemSelector` to point at your product grid.
+No — Store Filter is for stores only.
 
 </details>
 
@@ -524,13 +516,6 @@ No — Store Filter is for stores only. On any other page it starts up, finds no
 <summary>Will this slow my page down?</summary>
 
 The page itself loads exactly as it did before — Squarespace still renders the first page of products normally. The plugin asks for the rest of the catalogue in the background, starting that request while the page is still loading so it overlaps rather than queues. Every page is loaded however large the store is, so a big catalogue means a few more background requests before the filters are ready; the products on screen are usable throughout.
-
-</details>
-
-<details class="wm-doc-toggle">
-<summary>Do the Add to Cart buttons still work on filtered products?</summary>
-
-Yes for the products Squarespace rendered on the page itself, and the plugin re-runs Squarespace's commerce setup for the ones it brings in from later pages. If you have a very large shop and want to be certain, set `pagination.itemsPerPage` to match the number of products your section already shows, or send visitors to the product page to add to cart.
 
 </details>
 
