@@ -547,12 +547,34 @@ class WMStoreFilter {
       );
       if (!container) return [];
       return Array.from(container.querySelectorAll(this.list.itemSelector)).map(node =>
-        document.importNode(node, true)
+        this.unhideFetchedImage(document.importNode(node, true))
       );
     } catch (error) {
       console.warn(`[${this.pluginName}] Could not load the markup for ${url}`, error);
       return [];
     }
+  }
+
+  /* Squarespace's server renders every product image hidden — an inline
+     `display: none` and `sizes="0"` — and its own script reveals the ones on
+     page one after load. Products fetched from later pages (past 200 in a big
+     store) never get that pass, and `data-load="false"` makes ImageLoader skip
+     them too, so reveal the main image the same way Squarespace does. The
+     hover and additional images stay hidden, as they are on page one. */
+  unhideFetchedImage(node) {
+    const image = node.querySelector(
+      'img.grid-item-image:not(.grid-item-additional-image):not(.grid-image-hover)'
+    );
+    if (!image) return node;
+    image.style.display = 'block';
+    if (image.getAttribute('sizes') === '0') {
+      const native = this.list.container.querySelector(
+        `${this.list.itemSelector} img.grid-item-image[sizes]:not([sizes="0"])`
+      );
+      if (native) image.setAttribute('sizes', native.getAttribute('sizes'));
+      else image.removeAttribute('sizes');
+    }
+    return node;
   }
 
   buildEntry(item, nodesByKey) {
